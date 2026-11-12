@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>reavectors — transparent PNG to SVG / AI</title>
+  <link rel="stylesheet" href="/styles.css?v=4" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <strong>reavectors</strong>
+      <span class="tag">PNG &rarr; SVG / AI</span>
+    </div>
+    <span class="pill"><span id="serverVersion">checking server…</span> &middot; 100% local</span>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept="image/*" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">&#9633;</div>
+          <p class="drop-title">Drop a transparent PNG here</p>
+          <p class="drop-sub">or click to choose &middot; paste with Ctrl+V</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>Style
+          <select id="style">
+            <option value="logo" selected>Logo / flat art</option>
+            <option value="photo">Photo / gradient</option>
+            <option value="line">Line art / two-tone</option>
+          </select>
+        </label>
+        <label>Gradient detail <output id="detailOut">16</output>
+          <input id="detail" type="range" min="1" max="24" value="16" />
+        </label>
+        <label class="check">
+          <input id="refine" type="checkbox" checked />
+          Refine for higher detail (spends time)
+        </label>
+        <label>Refine budget <output id="refineOut">10</output>s
+          <input id="refineSecs" type="range" min="2" max="30" value="10" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="convert" class="primary" disabled>Vectorize</button>
+        <button id="dlSvg" disabled>Download .svg</button>
+        <button id="dlAi" disabled>Download .ai</button>
+        <button id="dlEps" disabled>Download .eps</button>
+      </div>
+      <p id="status" class="status">Choose an image to begin.</p>
+    </section>
+
+    <section class="stage">
+      <div class="stage-head">
+        <span>Preview</span>
+        <div class="tabs">
+          <button data-view="result" class="tab active">Vector</button>
+          <button data-view="source" class="tab">Source</button>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <img id="sourceImg" alt="source" hidden />
+        <div id="resultBox" class="result-box"></div>
+        <div class="empty" id="empty">Your vector preview appears here.</div>
+        <div class="progress" id="progress" hidden>
+          <div class="spinner"></div>
+          <div class="progress-text">
+            <strong id="progressTitle">Refining…</strong>
+            <span id="progressDetail">starting backend</span>
+          </div>
+        </div>
+      </div>
+      <ul class="stats" id="stats"></ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Tracing engine: Potrace (potracer). Palette: Pillow median-cut.
+       Outputs SVG, Illustrator (PDF-compatible .ai), PDF and EPS. No background
+       is added, so transparency is preserved.</p>
+  </footer>
+
+  <script src="/app.js?v=4"></script>
+</body>
+</html>

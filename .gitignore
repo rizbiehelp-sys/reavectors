@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+samples/out/
+samples/sample-logo.png
+*.egg-info/
+.pytest_cache/
