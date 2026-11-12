@@ -225,6 +225,46 @@ Covers: empty transparency, SVG/PDF/EPS headers, **PDF xref object offsets**,
 the **SVG path parser**, vtracer engine selection, and a **reconstruction
 agreement** check (≈0.99).
 
+## Deploy on Render
+
+This repo is Render-ready (`render.yaml`, binds `0.0.0.0:$PORT`, health check at
+`/api/health`).
+
+**Live service:** https://reavectors.onrender.com
+
+- **Type:** Web Service · **Runtime:** Python 3.12 · **Region:** Oregon
+- **Build:** `pip install -r requirements.txt`
+- **Start:** `python -m reavectors.server`
+- **Health check:** `/api/health`
+
+### Staying online (free)
+
+Render's **free** instances sleep after ~15 minutes idle and cold-start on the
+next hit. This repo includes `.github/workflows/keepalive.yml`, which pings
+`/api/health` every 10 minutes to keep it warm — that fits inside Render's free
+monthly allowance (~720 h of 750 h). GitHub pauses *scheduled* workflows after
+60 days of repo inactivity; any commit or manual run re-enables it.
+
+### Truly always-on without cold starts
+
+Swap the free plan for a paid instance (e.g. **Starter**, ~$7/mo, covered by the
+account credits) — no sleeping, no cold starts. One API call:
+
+```powershell
+$key = "<your Render API key>"
+$sid = "<service id>"
+Invoke-RestMethod -Method PATCH -Uri "https://api.render.com/v1/services/$sid" `
+  -Headers @{ Authorization = "Bearer $key"; "Content-Type" = "application/json" } `
+  -Body '{"serviceDetails":{"plan":"starter"}}'
+```
+
+### Notes
+
+- The service is **public and unauthenticated** — anyone with the URL can use
+  CPU. Add auth or a rate limit before promoting it widely.
+- Uploads are processed in memory and never persisted; the refiner runs the
+  native tracer (vtracer) in an isolated subprocess.
+
 ## License / intent
 
 Original code for lawful use: converting images **you have the rights to**.

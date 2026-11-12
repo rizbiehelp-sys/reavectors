@@ -1,0 +1,26 @@
+# Keeps the free Render instance awake.
+#
+# Render's *free* web instances spin down after ~15 minutes of inactivity and
+# cold-start on the next request. Pinging every 10 minutes keeps it warm, and
+# stays inside Render's free monthly instance-hour allowance (~720 h < 750 h).
+#
+# Note: GitHub disables scheduled workflows after 60 days of repository
+# inactivity. Any commit (or a manual run) re-enables it.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch:          # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping reavectors
+        run: |
+          for i in 1 2 3; do
+            curl -fsS --max-time 70 https://reavectors.onrender.com/api/health && break
+            echo "attempt $i failed; retrying in 20s"; sleep 20
+          done
+          echo "keepalive done"
