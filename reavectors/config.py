@@ -55,3 +55,12 @@ API_KEY = os.environ.get("REAVECTORS_API_KEY", "").strip()
 
 # Comma-separated extra origins allowed to call the API (besides same-origin).
 CORS_ORIGINS = [o.strip() for o in os.environ.get("REAVECTORS_CORS_ORIGINS", "").split(",") if o.strip()]
+
+# --- Supabase (optional backend database) ----------------------------------
+# Point at a Supabase project to enable /api/stats and a conversion log. Uses
+# the service-role key, kept ONLY in the host's environment (never in the repo).
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+STATS_CACHE_SECONDS = _int("REAVECTORS_STATS_CACHE_SECONDS", 30)
+# Activity interval that keeps a free Supabase project from pausing (7-day limit).
+SUPABASE_KEEPALIVE_SECONDS = _int("REAVECTORS_SUPABASE_KEEPALIVE_SECONDS", 3600)

@@ -198,8 +198,9 @@ practical choice here.
 ```
 reavectors/
 ├── reavectors/
-│   ├── config.py          # env-driven limits (upload, rate, concurrency, API key)
+│   ├── config.py          # env-driven limits (upload, rate, concurrency, API key, Supabase)
 │   ├── security.py        # rate limiter, concurrency gate, image validation, headers
+│   ├── db.py              # optional Supabase log + keep-alive activity
 │   ├── server.py          # stdlib HTTP server (routes, SSE, hardening)
 │   ├── vectorize.py       # entry point + Potrace engine + geometry model
 │   ├── vtracer_engine.py  # vtracer runner (subprocess-isolated)
@@ -213,6 +214,7 @@ reavectors/
 ├── tests/                 # reconstruction + format + engine + security tests
 ├── .github/workflows/     # keep-alive cron
 ├── render.yaml            # Render blueprint
+├── .env.example           # template of every env var (no real secrets)
 └── LICENSE
 ```
 
@@ -282,6 +284,66 @@ per request*, because tracing is the cost:
   keep `MAX_CONCURRENCY` ≈ CPU count.
 - The web UI and API are separate concerns: public traffic stays rate-limited;
   heavy programmatic jobs should use an API key and a bounded refine budget.
+
+## Backend database (Supabase) & always-on
+
+The service can log activity to **Supabase** (Postgres via the PostgREST HTTP
+API). It is optional and **best-effort** — if the DB is unreachable, conversions
+still work.
+
+- Every vectorize / refine / export writes a small row to `conversions`
+  (engine, style, counts, match %, seconds — **no image data, no IPs**).
+- `GET /api/stats` returns `{total, today, engines}` (cached).
+- `GET /api/health` reports `"db": "on" | "off"`.
+
+Setup used here (project ref `qpfvblqtwhmndckghirs`):
+
+```sql
+create table public.conversions (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  kind text not null default 'vectorize',
+  engine text, style text, colors int, figures int, subpaths int,
+  match_pct numeric, seconds numeric, fmt text
+);
+alter table public.conversions enable row level security;  -- service-role only
+```
+
+The server connects with the **service-role** key held in the host environment.
+RLS is on with **no policies**, so the public anon key cannot read the table, and
+the service key never leaves the server.
+
+### One cron keeps the whole stack awake
+
+Free tiers sleep when idle — Render after ~15 min, Supabase after **7 days**.
+`.github/workflows/keepalive.yml` pings the public `/api/health` every 10 min:
+
+```
+GitHub Actions (every 10 min)  ->  Render /api/health  ->  Supabase (hourly touch)
+```
+
+So a single cron keeps **Render and Supabase** online with **no manual requests**
+and **no secrets in GitHub** (the endpoint is public). GitHub pauses scheduled
+workflows after 60 days of repo inactivity; any commit re-enables it.
+
+## Secrets & rotation
+
+Real secrets live **only in the host environment** (Render → Environment), never
+in git. `.env.example` (committed) documents every variable; `.env` is
+git-ignored.
+
+Rotate any secret by updating it on the host and redeploying — no code change:
+
+```powershell
+# example: update one Render env var via the API
+$key = "<RENDER_API_KEY>"; $sid = "<service id>"
+$body = '[{"key":"SUPABASE_SERVICE_KEY","value":"<new value>"}]'
+Invoke-RestMethod -Method PUT -Uri "https://api.render.com/v1/services/$sid/env-vars" `
+  -Headers @{ Authorization="Bearer $key" } -ContentType "application/json" -Body $body
+```
+
+To rotate the **Supabase** key itself: Dashboard → Project Settings → API →
+regenerate the `service_role` key, then update `SUPABASE_SERVICE_KEY` on Render.
 
 ## Deploy on Render
 

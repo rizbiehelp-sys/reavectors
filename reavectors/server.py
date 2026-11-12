@@ -33,7 +33,7 @@ from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import config, security
+from . import config, security, db
 from .vectorize import vectorize
 from .export import render_pdf, render_eps
 
@@ -132,11 +132,14 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/health":
             from . import vtracer_engine
+            db.touch()  # throttled, non-blocking activity ping (keeps Supabase awake)
             return self._json(200, {
                 "ok": True,
                 "app": "reavectors",
                 "version": self.server_version,
-                "features": ["refine", "sse", "vtracer" if vtracer_engine.available() else "potrace"],
+                "db": "on" if db.configured() else "off",
+                "features": ["refine", "sse", "stats",
+                             "vtracer" if vtracer_engine.available() else "potrace"],
                 "limits": {
                     "max_upload_mb": config.MAX_UPLOAD_MB,
                     "max_dim": config.MAX_DIM,
@@ -144,6 +147,8 @@ class Handler(BaseHTTPRequestHandler):
                     "max_concurrency": config.MAX_CONCURRENCY,
                 },
             })
+        if path == "/api/stats":
+            return self._json(200, db.stats())
         if path in ("/", "/index.html"):
             return self._serve_index()
         safe = os.path.normpath(path.lstrip("/")).replace("\\", "/")
@@ -278,6 +283,13 @@ class Handler(BaseHTTPRequestHandler):
             if stats is not None:
                 payload |= {"match": stats.best_match, "passes": stats.iterations,
                             "seconds": round(stats.seconds, 1)}
+            db.record_conversion(
+                kind="refine" if stats is not None else "vectorize",
+                engine=result.engine, style=params["style"], colors=result.color_count,
+                figures=result.figure_count, subpaths=result.path_count,
+                match_pct=getattr(stats, "best_match", None),
+                seconds=round(stats.seconds, 1) if stats is not None else None,
+            )
             return self._json(200, payload, self._cors_headers())
         except Exception as exc:  # noqa: BLE001
             return self._error(500, f"{type(exc).__name__}")
@@ -307,6 +319,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 body = render_eps(result)
             ctype, ext = EXPORT_TYPES[fmt]
+            db.record_conversion(kind="export", engine=result.engine, fmt=fmt,
+                                 style=params["style"], colors=result.color_count)
             name = "".join(c for c in (qs.get("name", ["reavectors"])[0] or "reavectors")
                            if c.isalnum() or c in "._- ")[:60] or "reavectors"
             return self._send(200, body, ctype,
@@ -364,6 +378,10 @@ class Handler(BaseHTTPRequestHandler):
                 "seconds": round(stats.seconds, 1),
                 "palette": ["#%02X%02X%02X" % l.color for l in result.layers if l.figures],
             })
+            db.record_conversion(kind="refine", engine=result.engine, style=params["style"],
+                                 colors=result.color_count, figures=result.figure_count,
+                                 subpaths=result.path_count, match_pct=stats.best_match,
+                                 seconds=round(stats.seconds, 1))
         except _ClientGone:
             pass
         except Exception as exc:  # noqa: BLE001

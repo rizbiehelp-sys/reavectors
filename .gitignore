@@ -4,3 +4,8 @@ samples/out/
 samples/sample-logo.png
 *.egg-info/
 .pytest_cache/
+
+# never commit real secrets (the .env.example template IS tracked)
+.env
+.env.*
+!.env.example

@@ -294,6 +294,17 @@ def test_security_accepts_other_raster_formats():
     assert fmt == "JPEG" and reason is None
 
 
+def test_db_disabled_without_env():
+    from reavectors import db
+    if db.configured():
+        print("db configured in env -> assertion skipped")
+        return
+    # With no SUPABASE_* vars the helpers are inert and never raise.
+    assert db.stats().get("ok") is False
+    db.record_conversion(kind="test")  # must be a no-op, not an error
+    db.touch()
+
+
 def run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

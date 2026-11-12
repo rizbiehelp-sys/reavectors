@@ -1,8 +1,15 @@
-# Keeps the free Render instance awake.
+# Keep-alive chain: GitHub Actions -> Render -> Supabase
 #
-# Render's *free* web instances spin down after ~15 minutes of inactivity and
-# cold-start on the next request. Pinging every 10 minutes keeps it warm, and
-# stays inside Render's free monthly instance-hour allowance (~720 h < 750 h).
+# Free tiers sleep when idle:
+#   * Render free web instances spin down after ~15 min without traffic.
+#   * Supabase free projects pause after 7 days without activity.
+#
+# This workflow pings the public Render health endpoint every 10 minutes. Render
+# stays warm, and its health handler touches Supabase (throttled, see
+# reavectors/db.py) so the database never hits the 7-day inactivity pause.
+#
+# So: one cron keeps the whole stack online, with no manual requests and
+# no secrets in GitHub (the endpoint is public).
 #
 # Note: GitHub disables scheduled workflows after 60 days of repository
 # inactivity. Any commit (or a manual run) re-enables it.
@@ -17,7 +24,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping reavectors
+      - name: Ping reavectors (keeps Render + Supabase awake)
         run: |
           for i in 1 2 3; do
             curl -fsS --max-time 70 https://reavectors.onrender.com/api/health && break
