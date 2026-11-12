@@ -84,6 +84,11 @@ API_KEY = os.environ.get("REAVECTORS_API_KEY", "").strip()
 # Comma-separated extra origins allowed to call the API (besides same-origin).
 CORS_ORIGINS = [o.strip() for o in os.environ.get("REAVECTORS_CORS_ORIGINS", "").split(",") if o.strip()]
 
+# Trust X-Forwarded-For for the client IP only when we are genuinely behind a
+# trusted reverse proxy (Render sets RENDER=true). Otherwise a direct caller
+# could spoof the header and bypass per-IP rate limiting.
+TRUST_PROXY = bool(os.environ.get("RENDER")) or os.environ.get("REAVECTORS_TRUST_PROXY", "") == "1"
+
 # --- Supabase (optional backend database) ----------------------------------
 # Point at a Supabase project to enable /api/stats and a conversion log. Uses
 # the service-role key, kept ONLY in the host's environment (never in the repo).

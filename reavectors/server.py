@@ -26,6 +26,7 @@ Env:  PORT / HOST are honoured (Render sets PORT).
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import sys
@@ -90,10 +91,20 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- helpers -----------------------------------------------------------
     def _client_ip(self) -> str:
-        """Best-effort client IP (Render proxies via X-Forwarded-For)."""
-        xff = self.headers.get("X-Forwarded-For")
-        if xff:
-            return xff.split(",")[0].strip()
+        """
+        Client IP used for rate limiting.
+
+        We sit behind exactly one trusted proxy (Render), which *appends* the
+        real client address to ``X-Forwarded-For``. The trustworthy value is
+        therefore the **last** hop; taking the first hop would let a caller send
+        a spoofed ``X-Forwarded-For`` and bypass per-IP rate limiting.
+        """
+        if config.TRUST_PROXY:
+            xff = self.headers.get("X-Forwarded-For")
+            if xff:
+                parts = [p.strip() for p in xff.split(",") if p.strip()]
+                if parts:
+                    return parts[-1]
         return self.client_address[0] if self.client_address else "?"
 
     def _send(self, code, body: bytes, content_type="application/octet-stream",
@@ -151,10 +162,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, db.stats())
         if path in ("/", "/index.html"):
             return self._serve_index()
+        # Confine static file reads to WEB_DIR: resolve the real path and require
+        # it to stay under WEB_DIR. This blocks both `../` traversal and Windows
+        # absolute-path tricks (e.g. "/C:/Windows/win.ini" via os.path.join).
+        base = os.path.realpath(WEB_DIR)
         safe = os.path.normpath(path.lstrip("/")).replace("\\", "/")
-        if safe.startswith(".."):
-            return self._error(403, "forbidden")
-        full = os.path.join(WEB_DIR, safe)
+        full = os.path.realpath(os.path.join(base, safe))
+        if full != base and not full.startswith(base + os.sep):
+            return self._error(404, "not found")
         if os.path.isfile(full):
             ctype = {
                 ".js": "text/javascript; charset=utf-8",
@@ -201,9 +216,10 @@ class Handler(BaseHTTPRequestHandler):
         if not allowed:
             return self._error(429, "rate limit exceeded", {"Retry-After": str(retry)})
 
-        # optional API-key gate
+        # optional API-key gate (constant-time compare to avoid timing leaks)
         if config.API_KEY and parsed.path not in PUBLIC_PATHS:
-            if self.headers.get("X-API-Key", "") != config.API_KEY:
+            provided = self.headers.get("X-API-Key", "")
+            if not hmac.compare_digest(provided, config.API_KEY):
                 return self._error(401, "missing or invalid API key")
 
         # body with a hard size cap
