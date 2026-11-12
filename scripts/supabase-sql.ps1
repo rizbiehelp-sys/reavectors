@@ -1,4 +1,4 @@
-# supabase-sql.ps1 — run SQL against your Supabase project (Management API).
+﻿# supabase-sql.ps1 - run SQL against your Supabase project (Management API).
 #
 #   .\scripts\supabase-sql.ps1 "select count(*) from public.conversions;"
 #

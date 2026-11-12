@@ -1,4 +1,4 @@
-# render-set-env.ps1 — push runtime env vars to Render from the local .env.
+﻿# render-set-env.ps1 - push runtime env vars to Render from the local .env.
 #
 # Reads RENDER_API_KEY + RENDER_SERVICE_ID (and the REAVECTORS_* / SUPABASE_*
 # values) from .env and REPLACES the service's environment on Render.
@@ -38,9 +38,10 @@ $body = ConvertTo-Json $envs -Depth 4
 $h = @{ Authorization = "Bearer $rk"; Accept = "application/json" }
 $r = Invoke-WebRequest -Method PUT -Uri "https://api.render.com/v1/services/$sid/env-vars" `
     -Headers $h -ContentType "application/json" -Body $body -UseBasicParsing
-Write-Host "render-set-env: PUT $($r.StatusCode) — pushed $($envs.Count) vars" -ForegroundColor Green
-($r.Content | ConvertFrom-Json) | ForEach-Object {
-    $k = $_.envVar.key
-    $shown = if ($k -match "SECRET|KEY|TOKEN") { "***" } else { $_.envVar.value }
-    Write-Host ("  {0} = {1}" -f $k, $shown)
+Write-Host "render-set-env: PUT $($r.StatusCode) - pushed $($envs.Count) vars" -ForegroundColor Green
+foreach ($item in ($r.Content | ConvertFrom-Json)) {
+    $k = $item.envVar.key
+    $v = $item.envVar.value
+    if ($k -match 'SECRET|KEY|TOKEN') { $v = '***' }
+    Write-Host ('  ' + $k + ' = ' + $v)
 }

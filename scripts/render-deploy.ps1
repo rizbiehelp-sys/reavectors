@@ -1,4 +1,4 @@
-# render-deploy.ps1 — trigger a deploy of the Render service.
+﻿# render-deploy.ps1 - trigger a deploy of the Render service.
 #
 #   .\scripts\render-deploy.ps1
 #

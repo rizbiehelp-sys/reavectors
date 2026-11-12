@@ -1,4 +1,4 @@
-# load-env.ps1 — dot-source to load the repo's .env into this PowerShell session.
+﻿# load-env.ps1 - dot-source to load the repo's .env into this PowerShell session.
 #
 #   . .\scripts\load-env.ps1
 #
