@@ -198,17 +198,22 @@ practical choice here.
 ```
 reavectors/
 ├── reavectors/
+│   ├── config.py          # env-driven limits (upload, rate, concurrency, API key)
+│   ├── security.py        # rate limiter, concurrency gate, image validation, headers
+│   ├── server.py          # stdlib HTTP server (routes, SSE, hardening)
 │   ├── vectorize.py       # entry point + Potrace engine + geometry model
 │   ├── vtracer_engine.py  # vtracer runner (subprocess-isolated)
 │   ├── _vtracer_worker.py # the isolated worker
 │   ├── refine.py          # time-budgeted closed-loop refiner (trace->score->keep best)
 │   ├── svgparse.py        # SVG path -> geometry, incl. transforms (for AI/EPS export)
 │   ├── export.py          # geometry -> PDF/AI + EPS writers
-│   ├── cli.py             # command line
-│   └── server.py          # stdlib HTTP server + JSON/binary API
+│   └── cli.py             # command line
 ├── web/                   # drag-and-drop UI (vanilla HTML/CSS/JS)
 ├── samples/               # make_sample.py + example outputs
-└── tests/                 # reconstruction + format + engine tests
+├── tests/                 # reconstruction + format + engine + security tests
+├── .github/workflows/     # keep-alive cron
+├── render.yaml            # Render blueprint
+└── LICENSE
 ```
 
 > Note: the current `vtracer` wheel aborts on **keyword** arguments; the runner
@@ -224,6 +229,59 @@ python tests/test_reavectors.py
 Covers: empty transparency, SVG/PDF/EPS headers, **PDF xref object offsets**,
 the **SVG path parser**, vtracer engine selection, and a **reconstruction
 agreement** check (≈0.99).
+
+## Security & limits
+
+The server is hardened for public exposure. Everything is tunable via env vars
+(see `reavectors/config.py`); defaults:
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `REAVECTORS_MAX_UPLOAD_MB` | `12` | max request body (checked before reading) |
+| `REAVECTORS_MAX_DIM` | `8000` | max image edge (px) |
+| `REAVECTORS_MAX_PIXELS` | `40000000` | decompression-bomb guard |
+| `REAVECTORS_RATE` | `60` | requests / minute / IP |
+| `REAVECTORS_REFINE_RATE` | `12` | refine requests / minute / IP |
+| `REAVECTORS_MAX_CONCURRENCY` | `4` | simultaneous heavy jobs (rest queue / 503) |
+| `REAVECTORS_REFINE_MAX_SECONDS` | `12` | server-side cap on refine time |
+| `REAVECTORS_API_KEY` | *(unset)* | if set, require `X-API-Key` on `/api/*` |
+
+What's enforced:
+
+- **Input validation** — every upload is opened with Pillow, restricted to a
+  raster-format allow-list, and rejected on size / dimension / pixel limits
+  (`415` / `413`). Non-images never reach the tracer.
+- **Rate limiting** — per-IP sliding window (`429` + `Retry-After`).
+- **Concurrency cap** — a global gate limits simultaneous traces so a burst
+  can't exhaust the CPU; excess requests wait briefly or get `503`.
+- **Security headers** — strict CSP, `nosniff`, `X-Frame-Options: DENY`,
+  no-referrer, Permissions-Policy, COOP/CORP.
+- **API key (optional)** — set `REAVECTORS_API_KEY` to lock the API; the bundled
+  web UI is served with the key injected, so the page keeps working for people
+  you share the link with. It is an *unlisted-link* control, not identity auth.
+- **Secrets** — the Render API key is never stored in the repo or code.
+
+Run locally with a locked API and custom limits:
+
+```powershell
+$env:REAVECTORS_API_KEY="my-secret"; $env:REAVECTORS_RATE="120"
+python -m reavectors.server
+```
+
+## Scaling to thousands of requests/day
+
+5,000–10,000 requests/day is ~0.1 req/s average — small. What matters is *CPU
+per request*, because tracing is the cost:
+
+- A quick vectorize is ~0.2–1 s; a full `refine` is up to `REFINE_MAX_SECONDS`.
+- The **concurrency gate** keeps the box responsive under bursts; the **result
+  cache** (keyed by image hash + params) makes repeat/duplicate work free.
+- Recommended: cap refine (default 12 s), keep the **cache** on, and give the
+  service headroom with a paid instance (Starter = 0.5 CPU/512 MB, Standard =
+  1 CPU/2 GB). If you expect many concurrent *refines*, prefer **Standard** and
+  keep `MAX_CONCURRENCY` ≈ CPU count.
+- The web UI and API are separate concerns: public traffic stays rate-limited;
+  heavy programmatic jobs should use an API key and a bounded refine budget.
 
 ## Deploy on Render
 

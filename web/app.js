@@ -15,6 +15,14 @@
   let currentSvg = "";
   let refineState = { match: null, engine: null };
 
+  // Optional API key injected by the server (empty for a public deployment).
+  const API_KEY = (document.querySelector('meta[name="reavectors-key"]')?.content || "").trim();
+  function apiHeaders(extra) {
+    const h = Object.assign({}, extra || {});
+    if (API_KEY) h["X-API-Key"] = API_KEY;
+    return h;
+  }
+
   detail.addEventListener("input", () => (detailOut.textContent = detail.value));
   refineSecs.addEventListener("input", () => (refineOut.textContent = refineSecs.value));
 
@@ -97,7 +105,7 @@
       } else {
         const res = await fetch("/api/vectorize?" + params(), {
           method: "POST",
-          headers: { "Content-Type": currentFile.type || "application/octet-stream" },
+          headers: apiHeaders({ "Content-Type": currentFile.type || "application/octet-stream" }),
           body: currentFile,
         });
         const data = await res.json();
@@ -118,7 +126,7 @@
   async function streamRefine(started) {
     const res = await fetch("/api/refine?" + params(), {
       method: "POST",
-      headers: { "Content-Type": currentFile.type || "application/octet-stream" },
+      headers: apiHeaders({ "Content-Type": currentFile.type || "application/octet-stream" }),
       body: currentFile,
     });
     if (!res.ok || !res.body) {
@@ -205,7 +213,7 @@
       q.set("name", stripExt(currentFile.name));
       const res = await fetch("/api/export?" + q, {
         method: "POST",
-        headers: { "Content-Type": currentFile.type || "application/octet-stream" },
+        headers: apiHeaders({ "Content-Type": currentFile.type || "application/octet-stream" }),
         body: currentFile,
       });
       if (!res.ok) {

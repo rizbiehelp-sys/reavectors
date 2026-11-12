@@ -260,6 +260,40 @@ def test_vtracer_exports_roundtrip_through_parser():
     assert sum(len(l.figures) for l in layers) >= 1
 
 
+def test_security_validate_image():
+    from reavectors.security import validate_image
+    # a real PNG passes
+    buf = io.BytesIO()
+    make_test_image(96).save(buf, "PNG")
+    fmt, reason = validate_image(buf.getvalue())
+    assert fmt == "PNG" and reason is None
+    # non-image bytes are rejected
+    fmt, reason = validate_image(b"this is definitely not an image")
+    assert fmt is None and reason
+    # empty is rejected
+    fmt, reason = validate_image(b"")
+    assert fmt is None
+
+
+def test_security_rate_limiter():
+    from reavectors.security import SlidingWindowLimiter
+    lim = SlidingWindowLimiter(limit=2, window=1000)
+    assert lim.check("ip-a")[0] is True
+    assert lim.check("ip-a")[0] is True
+    allowed, retry = lim.check("ip-a")
+    assert allowed is False and retry >= 1
+    # a different key is independent
+    assert lim.check("ip-b")[0] is True
+
+
+def test_security_accepts_other_raster_formats():
+    from reavectors.security import validate_image
+    buf = io.BytesIO()
+    make_test_image(96).convert("RGB").save(buf, "JPEG")
+    fmt, reason = validate_image(buf.getvalue())
+    assert fmt == "JPEG" and reason is None
+
+
 def run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

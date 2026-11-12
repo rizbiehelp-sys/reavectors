@@ -12,3 +12,32 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"
+      # keep BLAS single-threaded in a small container (less memory, no surprises)
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      # --- limits / security (all optional; these are the defaults) ---
+      - key: REAVECTORS_MAX_UPLOAD_MB
+        value: "12"
+      - key: REAVECTORS_MAX_DIM
+        value: "8000"
+      - key: REAVECTORS_MAX_PIXELS
+        value: "40000000"
+      - key: REAVECTORS_RATE
+        value: "60"          # requests / minute / IP
+      - key: REAVECTORS_REFINE_RATE
+        value: "12"          # refine requests / minute / IP
+      - key: REAVECTORS_MAX_CONCURRENCY
+        value: "4"           # simultaneous heavy jobs
+      - key: REAVECTORS_MAX_SIZE
+        value: "1600"        # tracing downscale cap
+      - key: REAVECTORS_REFINE_MAX_SECONDS
+        value: "12"          # server-side cap on refine time
+      - key: REAVECTORS_CACHE_SIZE
+        value: "64"
+      # Set REAVECTORS_API_KEY to require an X-API-Key on every /api/* call
+      # (the bundled web UI is served with the key injected). Leave unset for a
+      # public, rate-limited service.
+      # - key: REAVECTORS_API_KEY
+      #   sync: false
