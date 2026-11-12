@@ -12,6 +12,34 @@ from __future__ import annotations
 import os
 
 
+def _load_dotenv() -> None:
+    """
+    Minimal, dependency-free `.env` loader.
+
+    Loads a `.env` file from the repo root (if present) into the process
+    environment **without overriding** variables that are already set. On a host
+    like Render there is no `.env` (secrets come from the platform), so this is a
+    no-op there; locally it lets you keep secrets in one git-ignored file.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
+
+
 def _int(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, default))

@@ -1,11 +1,16 @@
 __pycache__/
 *.pyc
+*.pyo
 samples/out/
 samples/sample-logo.png
 *.egg-info/
 .pytest_cache/
+.venv/
+venv/
 
 # never commit real secrets (the .env.example template IS tracked)
 .env
 .env.*
 !.env.example
+.secrets/
+*.local.env

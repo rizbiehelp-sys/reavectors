@@ -326,24 +326,65 @@ So a single cron keeps **Render and Supabase** online with **no manual requests*
 and **no secrets in GitHub** (the endpoint is public). GitHub pauses scheduled
 workflows after 60 days of repo inactivity; any commit re-enables it.
 
-## Secrets & rotation
+## Where secrets live (and how to rotate them)
 
-Real secrets live **only in the host environment** (Render → Environment), never
-in git. `.env.example` (committed) documents every variable; `.env` is
-git-ignored.
+There are exactly **two** places a secret ever lives, and **neither is git**:
 
-Rotate any secret by updating it on the host and redeploying — no code change:
+| Place | Holds | Used by |
+|---|---|---|
+| **Local `.env`** (git-ignored) | `RENDER_API_KEY`, `SUPABASE_ACCESS_TOKEN`, and a copy of the runtime keys | you + the helper scripts (and me, when you ask me to do deploy work) |
+| **Render → Environment** (encrypted) | the runtime keys: `SUPABASE_SERVICE_KEY`, `SUPABASE_URL`, limits | the running service |
+
+`.env.example` (committed) is the template; `.env` never leaves your machine.
+
+**Where to paste your NEW Render API key after rotating it:** the line
+`RENDER_API_KEY=` in `C:\Users\Hp\Documents\Default Project\reavectors\.env`.
+That's the only place I look. I read it from there at use time and never print or
+commit it. If you'd rather not keep it on disk, just paste it to me when needed.
+
+### Rotate in three steps
 
 ```powershell
-# example: update one Render env var via the API
-$key = "<RENDER_API_KEY>"; $sid = "<service id>"
-$body = '[{"key":"SUPABASE_SERVICE_KEY","value":"<new value>"}]'
-Invoke-RestMethod -Method PUT -Uri "https://api.render.com/v1/services/$sid/env-vars" `
-  -Headers @{ Authorization="Bearer $key" } -ContentType "application/json" -Body $body
+cd "C:\Users\Hp\Documents\Default Project\reavectors"
+
+# 1) paste the new key(s) into .env, then push runtime keys to Render:
+.\scripts\render-set-env.ps1
+
+# 2) redeploy so the new values take effect:
+.\scripts\render-deploy.ps1
 ```
 
-To rotate the **Supabase** key itself: Dashboard → Project Settings → API →
-regenerate the `service_role` key, then update `SUPABASE_SERVICE_KEY` on Render.
+- **Render API key** → regenerate in Render → Account Settings → API Keys → paste into `.env` (`RENDER_API_KEY`).
+- **Supabase service_role key** → Project Settings → API → regenerate → paste into `.env` (`SUPABASE_SERVICE_KEY`) → `render-set-env.ps1` → `render-deploy.ps1`.
+- **Supabase account token (`sbp_…`)** → Account → Access Tokens → regenerate → `.env` (`SUPABASE_ACCESS_TOKEN`).
+- **GitHub token** → prefer `gh auth` / Windows Credential Manager; only add `GITHUB_TOKEN` to `.env` if a script needs it.
+
+## Portable — clone anywhere, run anywhere
+
+The repo is the single source of truth; nothing essential lives only on your PC.
+On a new machine:
+
+```powershell
+git clone https://github.com/rizbiehelp-sys/reavectors
+cd reavectors
+pip install -r requirements.txt
+copy .env.example .env     # paste your keys
+python -m reavectors.server
+```
+
+…or with Docker (no Python on the host needed):
+
+```powershell
+docker build -t reavectors .
+docker run -p 8756:8756 --env-file .env reavectors
+```
+
+Local disk stays small: caches (`__pycache__`, `samples/out`, `.pytest_cache`) are
+git-ignored and regenerable, and `PYTHONDONTWRITEBYTECODE=1` is set in the image.
+Nothing about the deployment depends on this PC — Render builds from GitHub, and
+the keep-alive runs on GitHub. If the PC dies you lose only the local `.env`;
+everything else (code, config template, CI) is on GitHub, and the secrets are on
+Render.
 
 ## Deploy on Render
 
