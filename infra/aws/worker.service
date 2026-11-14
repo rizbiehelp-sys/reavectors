@@ -1,0 +1,23 @@
+# ReaVector GPU worker (systemd unit)
+# Install to /etc/systemd/system/reavectors-worker.service  (see bootstrap script).
+# The worker polls SQS outbound only; no inbound ports are exposed.
+[Unit]
+Description=ReaVector GPU inference worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/reavectors
+EnvironmentFile=/etc/reavectors/worker.env
+ExecStart=/opt/reavectors/.venv/bin/python -m reavectors.ai.worker
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=900
+# Hard limits so a runaway model can't wedge the box
+MemoryMax=14G
+CPUQuota=350%
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="reavectors-key" content="__REAVECTORS_API_KEY__" />
+  <title>ReaVector 3D Studio — PNG / SVG to 3D</title>
+  <link rel="stylesheet" href="/styles.css?v=6" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <strong>reavectors</strong>
+      <span class="tag">3D Studio</span>
+    </div>
+    <nav class="nav">
+      <a href="/">2D Vectorizer</a>
+      <a href="/studio3d.html" class="active">3D Studio</a>
+    </nav>
+    <span class="pill"><span id="serverVersion">100% local · no GPU</span></span>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">&#9633;</div>
+          <p class="drop-title">Drop an SVG or PNG</p>
+          <p class="drop-sub">or click · PNG is vectorised first (CPU, no GPU)</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>Extrusion depth <output id="depthOut">20</output>
+          <input id="depth" type="range" min="1" max="200" value="20" />
+        </label>
+        <label>Bevel size <output id="bevelOut">1</output>
+          <input id="bevel" type="range" min="0" max="8" step="0.2" value="1" />
+        </label>
+        <label>Bevel segments <output id="bevelSegOut">3</output>
+          <input id="bevelSeg" type="range" min="1" max="8" value="3" />
+        </label>
+        <label>Color
+          <input id="color" type="color" value="#34d3c0" />
+        </label>
+        <label>Metalness <output id="metalOut">0.2</output>
+          <input id="metal" type="range" min="0" max="1" step="0.05" value="0.2" />
+        </label>
+        <label>Roughness <output id="roughOut">0.5</output>
+          <input id="rough" type="range" min="0" max="1" step="0.05" value="0.5" />
+        </label>
+        <label class="check"><input id="wire" type="checkbox" /> Wireframe</label>
+        <label class="check"><input id="grid" type="checkbox" checked /> Show grid</label>
+        <label>Background
+          <input id="bg" type="color" value="#0d1117" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="resetCam">Reset camera</button>
+        <button id="exportGlb" class="primary" disabled>Download .glb</button>
+      </div>
+      <p id="status" class="status">Load an SVG or a transparent PNG to begin.</p>
+    </section>
+
+    <section class="stage">
+      <div class="stage-head">
+        <span>3D viewport</span>
+        <span id="meshStats" class="muted"></span>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="empty" id="empty">Your extruded 3D model appears here.<br />
+          <small>Runs entirely in your browser — no GPU, no upload of the 3D work.</small></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>PNG/SVG → 3D extrusion runs <strong>client-side</strong> (Three.js + ExtrudeGeometry).
+       PNG vectorisation reuses the existing CPU vectorizer. No GPU is started for this tool.</p>
+  </footer>
+
+  <script type="module" src="/studio3d.js?v=6"></script>
+</body>
+</html>

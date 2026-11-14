@@ -1,0 +1,59 @@
+{
+  "Version": "2012-10-17",
+  "Comment": "ReaVector GPU WORKER policy (attach to the g4dn.xlarge instance profile). The worker can ONLY poll its job queue, read inputs, write outputs to the user-assets prefix, read the model cache, and publish its heartbeat. It has NO EC2 administration rights and NO access to other users' private data beyond the prefixes the controller hands it. Replace placeholders. No credentials in this file.",
+  "Statement": [
+    {
+      "Sid": "PollJobQueueOnly",
+      "Effect": "Allow",
+      "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"],
+      "Resource": "arn:aws:sqs:ap-southeast-2:ACCOUNT_ID:reavectors-jobs"
+    },
+    {
+      "Sid": "ReadInputsWriteOutputs",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": [
+        "arn:aws:s3:::reavectors-user-assets/users/*/images/*",
+        "arn:aws:s3:::reavectors-user-assets/users/*/videos/*",
+        "arn:aws:s3:::reavectors-user-assets/users/*/models/*",
+        "arn:aws:s3:::reavectors-user-assets/users/*/loras/*"
+      ]
+    },
+    {
+      "Sid": "ReadModelCache",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::reavectors-model-cache",
+        "arn:aws:s3:::reavectors-model-cache/*"
+      ]
+    },
+    {
+      "Sid": "PublishHeartbeat",
+      "Effect": "Allow",
+      "Action": ["sqs:SendMessage"],
+      "Resource": "arn:aws:sqs:ap-southeast-2:ACCOUNT_ID:reavectors-heartbeat"
+    },
+    {
+      "Sid": "CloudWatchMetricsOnly",
+      "Effect": "Allow",
+      "Action": ["cloudwatch:PutMetricData"],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "cloudwatch:namespace": "ReaVector/GPU" }
+      }
+    },
+    {
+      "Sid": "SsmSessionManagerForAdmin",
+      "Effect": "Allow",
+      "Action": [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+        "ssm:UpdateInstanceInformation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

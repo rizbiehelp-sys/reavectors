@@ -386,6 +386,49 @@ the keep-alive runs on GitHub. If the PC dies you lose only the local `.env`;
 everything else (code, config template, CI) is on GitHub, and the secrets are on
 Render.
 
+## AI Studio (in progress)
+
+ReaVector is being extended into an AI creative platform while keeping the
+existing PNG→SVG functionality untouched. GPU compute **scales to zero** and every
+real AWS call is **off by default** (mock provider only).
+
+| Phase | Status |
+|---|---|
+| 0 — audit + docs + infra templates | ✅ done (`docs/`, `infra/aws/`) |
+| 1 — browser-only **PNG/SVG → 3D extrusion** (Three.js) | ✅ done (`/studio3d.html`) |
+| 2 — job API + SQLite + mock GPU lifecycle + tests | ✅ done (no AWS) |
+| 3–7 — real EC2 GPU, SDXL/LoRA, TripoSR, video | ⏳ prepared; **disabled pending approval** |
+
+### What works now
+
+- **3D Studio** (`/studio3d.html`): drop a transparent PNG (vectorised first, CPU)
+  or an SVG, extrude with depth/bevel/material controls, orbit/zoom/pan, export
+  **.glb**. Runs entirely in the browser — **no GPU**.
+- **Job API** (all JSON, `202` on submit, poll for status):
+  ```
+  POST /api/ai/jobs               GET /api/ai/jobs/{id}      POST /api/ai/jobs/{id}/cancel
+  GET  /api/ai/jobs/history       GET /api/ai/capacity       GET  /api/ai/models
+  GET  /api/ai/loras              POST /api/ai/loras/upload  DELETE /api/ai/loras/{id}
+  ```
+  Job types: `text_to_image`, `image_to_video`, `text_to_video`, `image_to_3d`.
+  Idempotency via `Idempotency-Key`; per-user quota + rate limits; ownership checks.
+- **GPU lifecycle manager**: race-safe state machine (`stopped→starting→…→ready→
+  busy→idle_grace→stopping→stopped`), **one start per idle period**, readiness
+  gate, idle shutdown, budget guard. Default provider is a **mock**; the EC2
+  adapter refuses to run unless `AI_GPU_PROVIDER=ec2` **and** `AI_ENABLE_REAL_GPU=1`.
+- **Cost guard** + AWS Budgets guidance (`docs/COST_GUARDRAILS.md`).
+
+### Safety guarantees in this code
+
+- No instance is ever created, started or stopped unless you enable it explicitly.
+- The existing t3.micro (`i-007e647a0a3badac4`) is never touched by any code path.
+- No secrets in the repo; the EC2 path uses an IAM instance profile.
+- Nothing is enabled in production before its licence is verified
+  (`docs/MODEL_LICENSES.md`).
+
+Docs: `docs/PROJECT_AUDIT.md`, `docs/AI_STUDIO_ARCHITECTURE.md`,
+`docs/MODEL_LICENSES.md`, `docs/AWS_DEPLOYMENT.md`, `docs/COST_GUARDRAILS.md`.
+
 ## Deploy on Render
 
 This repo is Render-ready (`render.yaml`, binds `0.0.0.0:$PORT`, health check at

@@ -89,6 +89,42 @@ CORS_ORIGINS = [o.strip() for o in os.environ.get("REAVECTORS_CORS_ORIGINS", "")
 # could spoof the header and bypass per-IP rate limiting.
 TRUST_PROXY = bool(os.environ.get("RENDER")) or os.environ.get("REAVECTORS_TRUST_PROXY", "") == "1"
 
+# --- AI Studio (all GPU work is off by default; mock provider only) --------
+AI_ENABLED = os.environ.get("AI_ENABLED", "1") == "1"
+AI_GPU_PROVIDER = os.environ.get("AI_GPU_PROVIDER", "mock").strip().lower()   # mock | ec2
+AI_ENABLE_REAL_GPU = os.environ.get("AI_ENABLE_REAL_GPU", "0") == "1"          # hard safety gate
+AI_GPU_INSTANCE_ID = os.environ.get("AI_GPU_INSTANCE_ID", "").strip()
+AI_GPU_REGION = os.environ.get("AI_GPU_REGION", "ap-southeast-2").strip()
+AI_JOB_DB_PATH = os.environ.get("AI_JOB_DB_PATH", os.path.join("data", "ai_jobs.db"))
+AI_QUEUE_BACKEND = os.environ.get("AI_QUEUE_BACKEND", "sqlite").strip().lower()
+AI_S3_BUCKET = os.environ.get("AI_S3_BUCKET", "").strip()
+AI_USE_API_FALLBACK = os.environ.get("AI_USE_API_FALLBACK", "0") == "1"
+AI_ALLOW_PAID_FALLBACK = os.environ.get("AI_ALLOW_PAID_FALLBACK", "0") == "1"
+AI_ADMIN_KEY = os.environ.get("AI_ADMIN_KEY", "").strip()
+
+AI_RATE_REQUESTS_PER_MINUTE = _int("AI_RATE_REQUESTS_PER_MINUTE", 3)
+AI_MAX_PENDING_PER_USER = _int("AI_MAX_PENDING_PER_USER", 2)
+AI_MAX_DAILY_IMAGE_JOBS = _int("AI_MAX_DAILY_IMAGE_JOBS", 20)
+AI_MAX_DAILY_VIDEO_JOBS = _int("AI_MAX_DAILY_VIDEO_JOBS", 4)
+AI_MAX_DAILY_3D_JOBS = _int("AI_MAX_DAILY_3D_JOBS", 10)
+AI_MAX_GLOBAL_QUEUE = _int("AI_MAX_GLOBAL_QUEUE", 25)
+AI_MAX_GPU_ACTIVE_JOBS = _int("AI_MAX_GPU_ACTIVE_JOBS", 1)
+
+AI_IDLE_GRACE_SECONDS = _int("AI_IDLE_GRACE_SECONDS", 600)
+AI_MAX_GPU_SESSION_SECONDS = _int("AI_MAX_GPU_SESSION_SECONDS", 3600)
+AI_MAX_GPU_SECONDS_PER_DAY = _int("AI_MAX_GPU_SECONDS_PER_DAY", 21600)
+AI_MAX_GPU_SECONDS_PER_MONTH = _int("AI_MAX_GPU_SECONDS_PER_MONTH", 200000)
+AI_BUDGET_MAX_USD = _float("AI_BUDGET_MAX_USD", 100.0)
+AI_GPU_USD_PER_HOUR = _float("AI_GPU_USD_PER_HOUR", 0.53)
+
+AI_MAX_LORA_BYTES = _int("AI_MAX_LORA_BYTES", 512 * 1024 * 1024)  # user LoRA upload cap
+
+AI_IMAGE_INFERENCE_TIMEOUT_SECONDS = _int("AI_IMAGE_INFERENCE_TIMEOUT_SECONDS", 180)
+AI_GPU_STARTUP_TIMEOUT_SECONDS = _int("AI_GPU_STARTUP_TIMEOUT_SECONDS", 600)
+AI_VIDEO_JOB_TIMEOUT_SECONDS = _int("AI_VIDEO_JOB_TIMEOUT_SECONDS", 1200)
+AI_IMAGE_3D_JOB_TIMEOUT_SECONDS = _int("AI_IMAGE_3D_JOB_TIMEOUT_SECONDS", 600)
+
+
 # --- Supabase (optional backend database) ----------------------------------
 # Point at a Supabase project to enable /api/stats and a conversion log. Uses
 # the service-role key, kept ONLY in the host's environment (never in the repo).

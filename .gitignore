@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
+data/
 samples/out/
 samples/sample-logo.png
 *.egg-info/

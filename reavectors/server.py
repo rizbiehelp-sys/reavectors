@@ -29,6 +29,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -160,6 +161,9 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/stats":
             return self._json(200, db.stats())
+        if path.startswith("/api/ai/"):
+            return self._handle_ai("GET", urlparse(self.path),
+                                   parse_qs(urlparse(self.path).query), self._client_ip())
         if path in ("/", "/index.html"):
             return self._serve_index()
         # Confine static file reads to WEB_DIR: resolve the real path and require
@@ -222,6 +226,10 @@ class Handler(BaseHTTPRequestHandler):
             if not hmac.compare_digest(provided, config.API_KEY):
                 return self._error(401, "missing or invalid API key")
 
+        # AI Studio endpoints (JSON / binary bodies, not images) — own size caps
+        if parsed.path.startswith("/api/ai/"):
+            return self._handle_ai("POST", parsed, qs, ip)
+
         # body with a hard size cap
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -270,6 +278,99 @@ class Handler(BaseHTTPRequestHandler):
             return self._export(data, params, refine, key, qs)
 
         return self._error(404, "unknown endpoint")
+
+    # -- AI Studio route dispatch -----------------------------------------
+    def _ai_user(self) -> str:
+        uid = self.headers.get("X-User-Id", "")
+        if re.fullmatch(r"[A-Za-z0-9_.\-]{1,64}", uid or ""):
+            return "u:" + uid
+        return "anon:" + hashlib.sha256(self._client_ip().encode()).hexdigest()[:16]
+
+    def _ai_admin(self) -> bool:
+        return bool(config.AI_ADMIN_KEY) and hmac.compare_digest(
+            self.headers.get("X-Admin-Key", ""), config.AI_ADMIN_KEY)
+
+    def _read_bounded(self, max_bytes):
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            return None
+        if length < 0 or length > max_bytes:
+            self.close_connection = True
+            return None
+        return self.rfile.read(length) if length else b""
+
+    def _read_json_bounded(self, max_bytes):
+        data = self._read_bounded(max_bytes)
+        if data is None:
+            return None
+        if not data:
+            return {}
+        try:
+            return json.loads(data.decode("utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _handle_ai(self, method, parsed, qs, ip):
+        if not config.AI_ENABLED:
+            return self._error(404, "AI studio is disabled")
+        from .ai.service import get_service
+        svc = get_service()
+        user = self._ai_user()
+        admin = self._ai_admin()
+        parts = [p for p in parsed.path[len("/api/ai/"):].split("/") if p]
+        try:
+            if method == "GET":
+                if parts == ["capacity"]:
+                    return self._json(200, svc.capacity()[1])
+                if parts == ["models"]:
+                    return self._json(200, svc.models()[1])
+                if parts == ["loras"]:
+                    return self._json(200, svc.loras(user)[1])
+                if parts == ["jobs", "history"]:
+                    return self._json(200, svc.history(user)[1])
+                if len(parts) == 2 and parts[0] == "jobs":
+                    st, obj = svc.get(user, parts[1], admin)
+                    return self._json(st, obj)
+            elif method == "POST":
+                if parts == ["jobs"]:
+                    body = self._read_json_bounded(64 * 1024)
+                    if body is None:
+                        return self._error(413, "request body too large")
+                    st, obj = svc.submit(user, body, self.headers.get("Idempotency-Key"))
+                    return self._json(st, obj, {"Location": f"/api/ai/jobs/{obj.get('job_id','')}"})
+                if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "cancel":
+                    st, obj = svc.cancel(user, parts[1])
+                    return self._json(st, obj)
+                if parts == ["loras", "upload"]:
+                    data = self._read_bounded(config.AI_MAX_LORA_BYTES)
+                    if data is None:
+                        return self._error(413, "LoRA upload too large")
+                    params = {k: qs.get(k, [None])[0] for k in
+                              ("name", "base", "trigger", "weight", "license", "source_url")}
+                    filename = qs.get("filename", [""])[0]
+                    st, obj = svc.upload_lora(user, filename, params, data)
+                    return self._json(st, obj)
+            elif method == "DELETE":
+                if len(parts) == 2 and parts[0] == "loras":
+                    st, obj = svc.delete_lora(user, parts[1])
+                    return self._json(st, obj)
+            return self._error(404, "unknown AI endpoint")
+        except Exception as exc:  # noqa: BLE001
+            return self._error(500, f"{type(exc).__name__}")
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        ip = self._client_ip()
+        allowed, retry = security.general_limiter.check(ip)
+        if not allowed:
+            return self._error(429, "rate limit exceeded", {"Retry-After": str(retry)})
+        if config.API_KEY and not hmac.compare_digest(self.headers.get("X-API-Key", ""), config.API_KEY):
+            return self._error(401, "missing or invalid API key")
+        if parsed.path.startswith("/api/ai/"):
+            return self._handle_ai("DELETE", parsed, qs, ip)
+        return self._error(404, "not found")
 
     # -- handlers ----------------------------------------------------------
     def _vectorize(self, data, params, refine, key):
