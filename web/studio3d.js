@@ -7,7 +7,8 @@
 import * as THREE from "/vendor/three/three.module.js";
 import { OrbitControls } from "/vendor/three/addons/controls/OrbitControls.js";
 import { SVGLoader } from "/vendor/three/addons/loaders/SVGLoader.js";
-import { GLTFExporter } from "/vendor/three/addons/exporters/GLTFExporter.js";
+// GLTFExporter is imported lazily inside exportGLB() so a problem in it can never
+// prevent the page (and the upload button) from initialising.
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $("status"), drop = $("drop"), fileInput = $("file"), emptyEl = $("empty");
@@ -202,18 +203,23 @@ exportBtn.addEventListener("click", exportGLB);
 // ---------------------------------------------------------------------------
 // export
 // ---------------------------------------------------------------------------
-function exportGLB() {
+async function exportGLB() {
   if (!group || !group.children.length) return;
   setStatus("Exporting GLB…");
-  new GLTFExporter().parse(group, (buf) => {
-    const blob = new Blob([buf], { type: "model/gltf-binary" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${sourceName}.glb`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    setStatus("Saved " + a.download);
-  }, (err) => setStatus("GLB export failed: " + err.message, true), { binary: true });
+  try {
+    const { GLTFExporter } = await import("/vendor/three/addons/exporters/GLTFExporter.js");
+    new GLTFExporter().parse(group, (buf) => {
+      const blob = new Blob([buf], { type: "model/gltf-binary" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${sourceName}.glb`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      setStatus("Saved " + a.download);
+    }, (err) => setStatus("GLB export failed: " + (err.message || err), true), { binary: true });
+  } catch (e) {
+    setStatus("GLB export unavailable: " + e.message, true);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -221,3 +227,6 @@ function exportGLB() {
 // ---------------------------------------------------------------------------
 function setStatus(msg, error) { statusEl.textContent = msg; statusEl.style.color = error ? "var(--accent-2)" : "var(--muted)"; }
 window.addEventListener("pagehide", () => { try { renderer?.dispose(); } catch (_) {} });
+
+// Signal the fallback checker that the module initialised successfully.
+window.__reavectors3dReady = true;
