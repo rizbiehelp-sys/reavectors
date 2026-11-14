@@ -30,6 +30,7 @@ GPU worker targets (`reavectors/ai/worker_models/triposr.py`).
 | Image→Video | **LTX-Video 2B distilled** | VERIFY repo | VERIFY (distilled weights may differ) | VERIFY | VERIFY |
 | Text→Video | **Wan 2.1 1.3B T2V** | VERIFY repo | VERIFY | VERIFY | VERIFY |
 | Image→3D (opt-in) | **SF3D** (`stabilityai/stable-fast-3d`) | VERIFY repo | **Stability AI Community License** (free personal + commercial < USD 1M revenue; enterprise above) | Permitted under Community License — review before >$1M | **adapter live** |
+| Image→3D (quality) | **Hunyuan3D-2.1** (`tencent/Hunyuan3D-2.1`) | VERIFY repo | **Tencent Hunyuan 3D Community License** (< 100M MAU; territory limits — verify EU/UK/KR) | Permitted under Community License; review territory | **adapter live** (~24 GB → g5/g6) |
 
 Verification checklist per model (fill in before enabling):
 

@@ -97,7 +97,17 @@ def build_default_manager(cache_dir: str = "./models") -> ModelManager:
     below $1M revenue). The same adapters run unchanged on Kaggle and AWS.
     """
     from .triposr import TripoSRAdapter
+
+    def _sf3d():
+        from .sf3d import SF3DAdapter
+        return SF3DAdapter(cache_dir=cache_dir)
+
+    def _hunyuan():
+        from .hunyuan3d import Hunyuan3DAdapter
+        return Hunyuan3DAdapter(cache_dir=cache_dir)
+
     return ModelManager({
         "triposr": lambda: TripoSRAdapter(cache_dir=cache_dir),
-        "sf3d": lambda: __import__("reavectors.ai.worker_models.sf3d", fromlist=["SF3DAdapter"]).SF3DAdapter(cache_dir=cache_dir),
+        "sf3d": _sf3d,
+        "hunyuan3d": _hunyuan,   # ~24 GB - needs g5/g6, not a T4
     })

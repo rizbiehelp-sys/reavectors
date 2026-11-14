@@ -38,6 +38,8 @@ ROADMAP = [
     ("wan2.1", "video", "Wan-AI/Wan2.1-T2V-14B", "Apache-2.0"),
     ("triposr", "image->3d", "stabilityai/TripoSR", "MIT"),
     ("sf3d", "image->3d", "stabilityai/stable-fast-3d", "Stability AI Community License"),
+    ("hunyuan3d", "image->3d", "tencent/Hunyuan3D-2.1", "Tencent Hunyuan 3D Community License"),
+    ("hunyuan3d-mini", "image->3d", "tencent/Hunyuan3D-2mini", "Tencent Hunyuan 3D Community License"),
 ]
 
 
@@ -158,7 +160,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.list:
         for name, kind, ver, lic in ROADMAP:
-            live = "adapter-live" if name in ("triposr", "sf3d") else "planned"
+            live = "adapter-live" if name in ("triposr", "sf3d", "hunyuan3d") else "planned"
             print(f"{name:12s} {kind:10s} {ver:42s} {lic:38s} [{live}]")
         return 0
     if not os.path.isfile(args.image):
