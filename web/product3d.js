@@ -24,8 +24,7 @@ const buildBtn = $("build"), resetBtn = $("resetCam"), exportBtn = $("exportGlb"
 const emptyEl = $("empty"), viewport = $("viewport"), meshStats = $("meshStats");
 const overlay = $("progress3d"), overlayText = $("overlayText"), report = $("report");
 const overlaySub = $("overlaySub"), barFill = $("barFill");
-const hModel = $("hModel"), hType = $("hType"), hPbr = $("hPbr");
-const hGenerate = $("hGenerate"), hStatus = $("hStatus"), hBar = $("hBar"), hDownload = $("hDownload");
+const openGlbBtn = $("openGlbBtn"), openGlb = $("openGlb");
 const thumbOrig = $("thumbOrig"), thumbCut = $("thumbCut"), thumbLabel = $("thumbLabel");
 const API_KEY = (document.querySelector('meta[name="reavectors-key"]')?.content || "").trim();
 
@@ -65,169 +64,35 @@ function setPhoto(file) {
   origUrl = URL.createObjectURL(file);
   thumbOrig.src = origUrl;
   buildBtn.disabled = false;
-  hGenerate.disabled = false;
   statusEl.textContent = `Loaded ${file.name}. ${modeSel.value === "high_fidelity" ? "Add back/side views, then reconstruct." : "Ready — reconstruct."}`;
 }
 
 // ---------------------------------------------------------------------------
-// hosted Hunyuan Pro (3D AI Studio) - paid credits, opt-in on the server
+// open a .glb produced elsewhere (e.g. a Kaggle GPU run)
 // ---------------------------------------------------------------------------
-hGenerate.addEventListener("click", () => generateHosted());
+openGlbBtn.addEventListener("click", () => openGlb.click());
+openGlb.addEventListener("change", () => { const f = openGlb.files[0]; if (f) loadGlbFile(f); });
 
-async function generateHosted() {
-  if (!photoFile) return;
-  hGenerate.disabled = true;
-  hBar.style.width = "0%";
-  hDownload.style.display = "none";
-  hStatus.textContent = "Submitting to Hunyuan Pro…";
+async function loadGlbFile(file) {
+  showOverlay("Loading GLB…");
   try {
-    const fd = new FormData();
-    fd.append("image", photoFile);
-    if (backInput.files[0]) fd.append("back", backInput.files[0]);
-    if (sideInput.files[0]) fd.append("side", sideInput.files[0]);
-    fd.append("model", hModel.value);
-    fd.append("generate_type", hType.value);
-    fd.append("enable_pbr", hPbr.checked ? "1" : "0");
-    const headers = {};
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch("/api/ai/product3d/hosted", { method: "POST", headers, body: fd });
-    const sub = await res.json();
-    if (!res.ok) throw new Error(sub.error || `HTTP ${res.status}`);
-    hStatus.textContent = `Queued (${sub.model}, ~${sub.credits} credits). Pro takes 3–6 min…`;
-    pollHosted(sub.task_id);
-  } catch (err) {
-    hStatus.textContent = "Hosted error: " + (err.message || err);
-    hGenerate.disabled = false;
-  }
-}
-
-async function pollHosted(taskId) {
-  const headers = {};
-  if (API_KEY) headers["X-API-Key"] = API_KEY;
-  for (let i = 0; i < 90; i++) {
-    await new Promise((r) => setTimeout(r, 6000));
-    try {
-      const r = await fetch(`/api/ai/product3d/hosted/${encodeURIComponent(taskId)}`, { headers });
-      const s = await r.json();
-      if (!r.ok) throw new Error(s.error || `HTTP ${r.status}`);
-      if (typeof s.progress === "number") hBar.style.width = `${s.progress}%`;
-      hStatus.textContent = `${s.status} · ${s.progress ?? 0}%`;
-      if (s.status === "FINISHED") {
-        const asset = (s.results || []).find((x) => x.asset_type === "3D_MODEL") || (s.results || [])[0];
-        if (!asset || !asset.asset) throw new Error("no asset returned");
-        await loadHostedGlb(asset.asset);
-        hStatus.textContent = "Hunyuan Pro result loaded — rotate/zoom, or download.";
-        hBar.style.width = "100%";
-        hGenerate.disabled = false;
-        return;
-      }
-      if (s.status === "FAILED" || s.failure_reason) {
-        throw new Error(s.failure_reason || "generation failed");
-      }
-    } catch (err) {
-      hStatus.textContent = "Hosted error: " + (err.message || err);
-      hGenerate.disabled = false;
-      return;
-    }
-  }
-  hStatus.textContent = "Timed out waiting for the hosted job.";
-  hGenerate.disabled = false;
-}
-
-function loadHostedGlb(assetUrl) {
-  // fetch through our SSRF-guarded proxy (same-origin, no CORS issues)
-  const proxy = `/api/ai/product3d/hosted/asset?url=${encodeURIComponent(assetUrl)}`;
-  hDownload.href = proxy;
-  hDownload.style.display = "inline-block";
-  return new Promise((resolve, reject) => {
-    new GLTFLoader().load(proxy, (gltf) => {
-      disposeGroup(productGroup);
-      productGroup.add(gltf.scene);
-      // frame the model
-      const box = new THREE.Box3().setFromObject(gltf.scene);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      gltf.scene.position.sub(center);
-      const maxd = Math.max(size.x, size.y, size.z) || 1;
-      camera.position.set(0, maxd * 0.15, maxd * 2.2);
-      controls.target.set(0, 0, 0); controls.update();
-      emptyEl.hidden = true;
-      meshStats.textContent = "Hunyuan Pro GLB";
-      resolve();
-    }, undefined, reject);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// request
-// ---------------------------------------------------------------------------
-// read a Server-Sent Events stream and dispatch each parsed JSON event
-async function readSSE(res, onEvent) {
-  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-      for (const line of chunk.split("\n")) {
-        if (line.startsWith("data:")) { try { onEvent(JSON.parse(line.slice(5).trim())); } catch (e) { /* keepalive */ } }
-      }
-    }
-  }
-}
-
-async function buildProduct() {
-  if (!photoFile || building) return;
-  const budget = Number(refineEl.value) || 30;
-  building = true; buildBtn.disabled = true;
-  overlayText.textContent = "Starting…"; overlaySub.textContent = `0 s / ${budget} s`;
-  barFill.style.width = "0%"; overlay.hidden = false;
-  await raf();
-  try {
-    const fd = new FormData();
-    fd.append("image", photoFile);
-    if (labelInput.files[0]) fd.append("label", labelInput.files[0]);
-    if (modeSel.value === "high_fidelity") {
-      if (backInput.files[0]) fd.append("back", backInput.files[0]);
-      if (sideInput.files[0]) fd.append("side", sideInput.files[0]);
-    }
-    fd.append("material", materialSel.value);
-    fd.append("mode", modeSel.value);
-    const headers = {};
-    if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch(`/api/ai/product3d?stream=1&refine=${budget}`, { method: "POST", headers, body: fd });
-    if (!res.ok || !res.body) throw new Error(await res.text() || `HTTP ${res.status}`);
-
-    let spec = null, errMsg = null;
-    await readSSE(res, (ev) => {
-      if (ev.type === "progress") {
-        overlayText.textContent = ev.stage || "Working…";
-        overlaySub.textContent = `${(ev.elapsed ?? 0)} s / ${(ev.budget ?? budget)} s`;
-        barFill.style.width = (ev.pct || 0) + "%";
-      } else if (ev.type === "done") {
-        spec = ev.spec; barFill.style.width = "100%";
-      } else if (ev.type === "error") {
-        errMsg = ev.error || "failed";
-      }
-    });
-    if (errMsg) throw new Error(errMsg);
-    if (!spec) throw new Error("no result returned");
-
-    currentSpec = spec;
-    thumbCut.src = spec.previews.cutout;
-    thumbLabel.src = spec.label.image;
-    await renderProduct(spec);
-    showReport(spec);
-    exportBtn.disabled = false;
-    const wk = spec.work || {};
-    statusEl.textContent = `Reconstructed a ${spec.package.type} · confidence ${spec.quality.confidence} · ${wk.used_s ?? "?"}s (${wk.cutout_iterations ?? "?"} matting passes).`;
-  } catch (err) {
-    statusEl.textContent = "Error: " + (err.message || err);
-  } finally {
-    hideOverlay(); building = false; buildBtn.disabled = false;
-  }
+    const buf = await file.arrayBuffer();
+    const gltf = await new Promise((res, rej) => new GLTFLoader().parse(buf, "", res, rej));
+    disposeGroup(productGroup);
+    productGroup.add(gltf.scene);
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    gltf.scene.position.sub(center);
+    const maxd = Math.max(size.x, size.y, size.z) || 1;
+    camera.position.set(0, maxd * 0.15, maxd * 2.2);
+    controls.target.set(0, 0, 0); controls.update();
+    emptyEl.hidden = true;
+    meshStats.textContent = "Loaded GLB: " + file.name;
+    statusEl.textContent = `Loaded ${file.name} (${Math.round(buf.byteLength / 1024)} KB).`;
+  } catch (e) {
+    statusEl.textContent = "GLB load failed: " + (e.message || e);
+  } finally { hideOverlay(); }
 }
 
 // ---------------------------------------------------------------------------

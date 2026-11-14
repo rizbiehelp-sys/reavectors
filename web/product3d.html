@@ -90,7 +90,9 @@
       <div class="actions">
         <button id="build" class="primary" disabled>Reconstruct 3D</button>
         <button id="resetCam">Reset camera</button>
+        <button id="openGlbBtn">Open a .glb (from Kaggle)</button>
         <button id="exportGlb" disabled>Download .glb</button>
+        <input id="openGlb" type="file" accept=".glb,model/gltf-binary" hidden />
       </div>
       <p id="status" class="status">Load a product photo to begin. Branding is taken from your
         photo/label — never re-generated.</p>
@@ -117,26 +119,6 @@
 
       <div class="report" id="report" hidden></div>
 
-      <div class="report" id="hosted">
-        <h4>Hosted AI reconstruction &mdash; Hunyuan Pro (3D AI Studio)</h4>
-        <p class="muted">True AI image&rarr;3D. Uses a <strong>paid credit</strong> API
-          (Pro = 60 credits, +20 for PBR) and is enabled only when the server is configured.</p>
-        <div class="row">
-          <label>Model
-            <select id="hModel"><option value="3.1">3.1 (best)</option><option value="3.0">3.0</option></select>
-          </label>
-          <label>Generation type
-            <select id="hType"><option>Normal</option><option>Geometry</option></select>
-          </label>
-          <label class="check"><input id="hPbr" type="checkbox" checked /> PBR textures (+20 credits)</label>
-        </div>
-        <div class="actions">
-          <button id="hGenerate" class="primary" disabled>Generate with Hunyuan Pro (hosted)</button>
-          <a id="hDownload" class="muted" style="align-self:center;display:none" download>Download .glb</a>
-        </div>
-        <p id="hStatus" class="status"></p>
-        <div class="bar"><div id="hBar"></div></div>
-      </div>
     </section>
   </main>
 

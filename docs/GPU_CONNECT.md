@@ -1,133 +1,61 @@
-# Connect Kaggle + AWS GPU (on-demand) — step by step
+# Compute layout — Kaggle GPU + Render/Cloudflare + always-on VPS
 
-The browser **Product 3D** tool is a fast *parametric* approximation (≈ 30 % match —
-it measures the silhouette and wraps your exact label). The **90–98 %** result comes
-from an **AI reconstruction model** running on a GPU. This guide connects that GPU
-**on demand**: it starts only when a job is queued and stops when idle.
+## Roles
 
-Nothing here is auto-run. Every AWS action is manual, and the app only *starts/stops
-one instance you name* — it never creates resources.
+| Layer | Runs on | What it does |
+|---|---|---|
+| Frontend / CDN / cache | **Cloudflare** | static `web/`, caching, TLS |
+| API (Python `http.server`) | **Render** | Product 3D parametric pass, jobs, API |
+| **GPU inference** | **Kaggle** (owner, personal) | TripoSR / SF3D / Hunyuan3D → GLB |
+| Always-on VPS | **AWS t3.micro** (existing) | relay / heartbeat / small always-active task |
 
----
+There is **no AWS GPU** and **no hosted paid 3D API** anymore. GPU work is done on
+Kaggle by you (the owner) and the resulting `.glb` is opened in the studio.
 
-## 0. Which model / which GPU
+## Why not AWS GPU
+The g4dn/g5 instances are **not free tier** and only bill by the hour. Kaggle gives
+you two free T4s for personal use, so we use Kaggle for all GPU inference.
 
-Target is fixed: **`g4dn.xlarge` (Tesla T4, 16 GB)** — free-credit friendly.
-`g5`/`g6` are **not** used, so everything must fit **16 GB**. (Hunyuan3D-2.1 needs
-~24 GB and is therefore **not runnable** on this tier — excluded.)
+## Kaggle GPU (all GPU usage)
 
-| Model | VRAM | Fits T4 (16 GB)? | Licence | Notes |
-|---|---|---|---|---|
-| **TripoSR** | ~6 GB | ✅ | MIT | lightest / fastest |
-| **SF3D** | ~6.5 GB | ✅ | Stability AI Community | **default** — best speed/quality on a T4 (<$1M revenue) |
-| **Hunyuan3D-2mini** | ~10 GB | ✅ (tight) | Tencent Hunyuan Community | **quality bump** within 16 GB |
-| ~~Hunyuan3D-2.1~~ | ~24 GB | ❌ | — | needs g5/g6 → out of scope on credits |
+See **`kaggle/README.md`** for copy-paste cells. Short version:
 
-Recommendation: **`g4dn.xlarge` + SF3D** by default; switch `AI_3D_MODEL=hunyuan3d-mini`
-for the best free fidelity a T4 can give. The manager loads one model at a time and
-frees VRAM between jobs, so a single T4 covers all of them.
+1. Notebook → Accelerator **GPU T4 ×2**.
+2. `git clone` the repo, `pip install -r` the model repo (TripoSR / SF3D).
+3. `python scripts/ai3d_run.py --image <photo> --model triposr --out out.glb`.
+4. Studio → **Open a .glb (from Kaggle)** → the model loads in the viewer.
 
----
+`bench/kaggle_benchmark.py` writes a report (time, **peak VRAM**, licence, quality)
+so you can pick the default per job.
 
-## Part A — Kaggle (personal benchmarking only)
+> Kaggle terms: personal, non-commercial. Do **not** connect Kaggle sessions or
+> tunnels to public ReaVector customer requests without Kaggle's written
+> authorisation. Generate manually and open the GLB.
 
-Kaggle is your free dual-T4 dev box. Kaggle's terms are **personal, non-commercial**;
-**never** expose Kaggle sessions/tunnels to public ReaVector requests.
+## Models
 
-1. **Create the notebook** → *New Notebook* → Settings → Accelerator **GPU T4 ×2**
-   (verify `!nvidia-smi` shows two Tesla T4).
-2. **Get the code**
-   ```bash
-   !git clone https://github.com/rizbiehelp-sys/reavectors.git
-   %cd reavectors
-   !pip -q install numpy pillow trimesh
-   ```
-3. **Install the model you're benchmarking** (e.g. TripoSR):
-   ```bash
-   !git clone https://github.com/VAST-AI-Research/TripoSR /opt/TripoSR
-   !pip -q install -r /opt/TripoSR/requirements.txt
-   ```
-4. **Benchmark each GPU separately** (watch their VRAM independently):
-   ```bash
-   !CUDA_VISIBLE_DEVICES=0 python bench/kaggle_benchmark.py --image data/product.png --models triposr,sf3d
-   !CUDA_VISIBLE_DEVICES=1 python bench/kaggle_benchmark.py --image data/product.png --models hunyuan3d
-   ```
-   Each run writes `bench/results/benchmark-*.json` + a markdown table
-   (model, version, licence, inference time, **peak VRAM**, resolution, quality notes).
-5. **Decide the default** from the reports, then mirror it in production
-   (`AI_3D_MODEL`). Kaggle is for *choosing*, AWS is for *serving*.
+| Model | VRAM | Fits T4? | Licence |
+|---|---|---|---|
+| **TripoSR** | ~6 GB | ✅ | MIT |
+| **SF3D** | ~6.5 GB | ✅ | Stability AI Community |
+| **Hunyuan3D-2.1** | ~24 GB | ❌ (needs g5/g6) | Tencent Hunyuan Community |
 
----
+## Always-on VPS (AWS)
 
-## Part B — AWS on-demand production GPU
+The existing **t3.micro** is enough for a lightweight always-on relay/heartbeat.
+If you want to self-host the Python API or run a small queue on the VPS:
 
-### B1. Create the worker (once, by hand in the console)
+- **t3.micro** (1 GB) — fine for a relay only; too small for the app + tools.
+- **m7i-flex.large** (2 vCPU / 8 GB) — comfortable if you move the API off Render
+  or add a worker/queue there. Not free tier (~$0.08–0.10/hr when running).
+- Free-tier options are only `t3.micro`/`t2.micro`; there is no free larger box.
 
-1. **EBS volume** (persistent weights): EC2 → Volumes → *Create*, 100 GB `gp3`,
-   same AZ as the instance → attach later at `/mnt/models`.
-2. **IAM role**: EC2 → Roles → create from `infra/aws/gpu-worker-iam-policy.json`
-   (SQS poll + S3 put + `ec2:StopInstances` on **its own** instance). No keys on the box.
-3. **Launch instance**: `g4dn.xlarge` (T4 16 GB), **Deep Learning AMI (Ubuntu)**,
-   attach the role, **no inbound Security Group rules**, access via **SSM Session
-   Manager**. Note: GPU instances are **not** in AWS Free Tier — this draws on your
-   credits (~$0.53/hr), which is why the instance stays **stopped** unless a job runs.
-4. **Attach + mount the EBS** and run the bootstrap once:
-   ```bash
-   sudo mkfs.ext4 /dev/nvme1n1 && sudo mkdir -p /mnt/models && sudo mount /dev/nvme1n1 /mnt/models
-   cd /opt && sudo git clone https://github.com/rizbiehelp-sys/reavectors.git && cd reavectors
-   sudo tee /etc/reavectors/worker.env >/dev/null <<EOF
-   QUEUE_URL=<your SQS queue url>
-   ASSETS_BUCKET=<your S3 bucket>
-   AI_3D_MODEL=sf3d
-   EOF
-   sudo bash infra/aws/bootstrap-gpu-worker.sh
-   sudo systemctl enable reavectors-worker.service
-   ```
-5. **Stop the instance** (EC2 → Stop). Baseline = **stopped** — it costs nothing idle.
+Recommendation: keep **t3.micro** as the always-on relay; keep the API on **Render**
+and static on **Cloudflare**. Only upgrade the VPS if you decide to self-host the API.
 
-### B2. Point the app at it (Render → Environment, never in git)
+## Backend location
 
-```
-AI_GPU_PROVIDER=ec2
-AI_ENABLE_REAL_GPU=1
-AI_GPU_INSTANCE_ID=i-xxxxxxxx
-AI_GPU_REGION=ap-southeast-2
-AI_IDLE_GRACE_SECONDS=600
-AI_MAX_GPU_SESSION_SECONDS=3600
-AI_MAX_GPU_SECONDS_PER_DAY=21600
-AI_MAX_GPU_SECONDS_PER_MONTH=200000
-AI_BUDGET_MAX_USD=100
-AI_GPU_USD_PER_HOUR=0.53
-```
-
-### B3. On-demand behaviour (already implemented)
-
-- First queued job → `lifecycle.kick()` starts the GPU **once** (one start per idle
-  period, guarded by a lock; N simultaneous submits = 1 start).
-- Worker polls **SQS** (outbound only), runs the model, uploads the `.glb` to **S3**.
-- No queued/running work for `AI_IDLE_GRACE_SECONDS` (600 s) → the app **stops** the
-  instance. It **never** stops mid-work.
-- Budget caps (`PER_DAY`/`PER_MONTH`/`BUDGET_MAX_USD`) reject new jobs before they can
-  start the GPU.
-
-### B4. Kill switch
-
-Set `AI_ENABLE_REAL_GPU=0` (and/or `AI_GPU_PROVIDER=mock`) → the app instantly stops
-touching AWS. Default is already **off**.
-
----
-
-## Part C — Verify
-
-1. Submit one Product 3D / job from the app.
-2. EC2 console: the instance goes **running** within a minute; `sudo systemctl status
-   reavectors-worker` shows the model loading.
-3. The job result lands in S3 and appears in the app.
-4. Leave it idle ~10 min → EC2 shows **stopped** (idle-grace stop).
-
----
-
-## Costs (why on-demand)
-
-`g4dn.xlarge` ≈ **$0.53/hr**. 30 min/day ≈ **$8/month**; 0 idle minutes ≈ **$0**.
-The instance runs **only** while jobs are flowing.
+- **Render** — the Python service (`reavectors/server.py`): Product 3D parametric
+  reconstruction, job API, `/api/health`, `/api/stats`.
+- **Cloudflare** — serve `web/` (index, studio3d, product3d) and cache static assets.
+  The current server also serves these; moving them to Cloudflare Pages is optional.

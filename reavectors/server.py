@@ -354,11 +354,6 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, svc.capacity()[1])
                 if parts == ["models"]:
                     return self._json(200, svc.models()[1])
-                if len(parts) == 3 and parts[0] == "product3d" and parts[1] == "hosted":
-                    if parts[2] == "asset":
-                        return self._hosted_asset(qs.get("url", [""])[0])
-                    st, obj = svc.hosted3d_status(user, parts[2])
-                    return self._json(st, obj)
                 if parts == ["loras"]:
                     return self._json(200, svc.loras(user)[1])
                 if parts == ["jobs", "history"]:
@@ -385,8 +380,6 @@ class Handler(BaseHTTPRequestHandler):
             elif method == "POST":
                 if parts == ["product3d"]:
                     return self._product3d(svc, user, qs)
-                if parts == ["product3d", "hosted"]:
-                    return self._product3d_hosted(svc, user)
                 if parts == ["3d"]:
                     data = self._read_bounded(config.MAX_UPLOAD_BYTES)
                     if data is None:
@@ -419,77 +412,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(404, "unknown AI endpoint")
         except Exception as exc:  # noqa: BLE001
             return self._error(500, f"{type(exc).__name__}")
-
-    def _product3d_hosted(self, svc, user):
-        """Submit the photo (+ optional back/left/right) to the hosted Hunyuan Pro API."""
-        import base64
-        ctype = self.headers.get("Content-Type", "")
-        data = self._read_bounded(config.MAX_UPLOAD_BYTES * 3)
-        if data is None:
-            return self._error(413, "upload too large")
-        if "multipart/form-data" not in ctype:
-            return self._error(415, "expected multipart/form-data")
-        boundary = None
-        for part in ctype.split(";"):
-            part = part.strip()
-            if part.startswith("boundary="):
-                boundary = part[len("boundary="):].strip().strip('"')
-        if not boundary:
-            return self._error(400, "missing multipart boundary")
-        fields = _parse_multipart(data, boundary)
-        image = fields.get("image")
-        if not image:
-            return self._error(400, "missing 'image' field")
-
-        def data_url(bs: bytes) -> str:
-            if bs[:3] == b"\xff\xd8\xff":
-                fmt = "jpeg"
-            elif bs[:8] == b"\x89PNG\r\n\x1a\n":
-                fmt = "png"
-            elif bs[:4] == b"RIFF" and bs[8:12] == b"WEBP":
-                fmt = "webp"
-            else:
-                fmt = "png"
-            return f"data:image/{fmt};base64," + base64.b64encode(bs).decode("ascii")
-
-        model = (fields.get("model") or b"").decode("utf-8", "replace") or None
-        pbr_raw = fields.get("enable_pbr")
-        enable_pbr = None if pbr_raw is None else (pbr_raw.decode("utf-8", "replace").lower()
-                                                   in ("1", "true", "on", "yes"))
-        generate_type = (fields.get("generate_type") or b"Normal").decode("utf-8", "replace")
-        extra = [{"view_type": vt, "view_image": data_url(fields[vt])}
-                 for vt in ("back", "left", "right") if fields.get(vt)]
-        multi = None
-        if extra:
-            multi = [{"view_type": "front", "view_image": data_url(image)}] + extra
-        st, obj = svc.hosted3d_submit(user, image, model=model, enable_pbr=enable_pbr,
-                                      generate_type=generate_type, multi_view_images=multi)
-        return self._json(st, obj, self._cors_headers())
-
-    def _hosted_asset(self, url: str):
-        """SSRF-guarded proxy for the generated GLB (viewer + download, CORS-safe)."""
-        import urllib.parse
-        import urllib.request
-        if not url:
-            return self._error(400, "missing url")
-        try:
-            p = urllib.parse.urlparse(url)
-        except Exception:  # noqa: BLE001
-            return self._error(400, "bad url")
-        host = p.hostname or ""
-        allowed = config.AI_3DAS_ASSET_HOSTS
-        if p.scheme != "https" or not (host == allowed or host.endswith("." + allowed)):
-            return self._error(403, "asset host not allowed")
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "reavectors/0.3"})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                body = r.read(120 * 1024 * 1024 + 1)
-            if len(body) > 120 * 1024 * 1024:
-                return self._error(413, "asset too large")
-        except Exception as exc:  # noqa: BLE001
-            return self._error(502, f"asset fetch failed: {type(exc).__name__}")
-        return self._send(200, body, "model/gltf-binary",
-                          {"Content-Disposition": 'inline; filename="model.glb"'})
 
     def _product3d(self, svc, user, qs=None):
         """
