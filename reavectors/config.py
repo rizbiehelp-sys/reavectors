@@ -70,6 +70,13 @@ MAX_CONCURRENCY = _int("REAVECTORS_MAX_CONCURRENCY", 4)  # simultaneous heavy jo
 MAX_SIZE = _int("REAVECTORS_MAX_SIZE", 1600)             # tracing downscale cap
 REFINE_MAX_SECONDS = _int("REAVECTORS_REFINE_MAX_SECONDS", 12)
 REFINE_DEFAULT_SECONDS = _int("REAVECTORS_REFINE_DEFAULT_SECONDS", 10)
+
+# Product 3D reconstruction: a real, time-boxed refinement budget (seconds).
+# The pipeline keeps improving the cutout/profile/label until the budget is spent
+# (like the vectorizer's refine), so results are not instant.
+PRODUCT3D_REFINE_SECONDS = _int("REAVECTORS_PRODUCT3D_REFINE_SECONDS", 30)
+PRODUCT3D_REFINE_MIN = _int("REAVECTORS_PRODUCT3D_REFINE_MIN", 10)
+PRODUCT3D_REFINE_MAX = _int("REAVECTORS_PRODUCT3D_REFINE_MAX", 120)
 VTracer_TIMEOUT = _int("REAVECTORS_VTRACER_TIMEOUT", 60)
 
 # --- result cache ----------------------------------------------------------

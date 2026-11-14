@@ -379,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(st, obj)
             elif method == "POST":
                 if parts == ["product3d"]:
-                    return self._product3d(svc, user)
+                    return self._product3d(svc, user, qs)
                 if parts == ["3d"]:
                     data = self._read_bounded(config.MAX_UPLOAD_BYTES)
                     if data is None:
@@ -413,8 +413,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             return self._error(500, f"{type(exc).__name__}")
 
-    def _product3d(self, svc, user):
-        """Multipart: image (required) + label (optional) + quad/material/mode."""
+    def _product3d(self, svc, user, qs=None):
+        """
+        Multipart: image (required) + label (optional) + quad/material/mode.
+
+        ``?refine=<seconds>`` (10-120, default PRODUCT3D_REFINE_SECONDS) sets the
+        refinement budget. ``?stream=1`` (or Accept: text/event-stream) streams
+        progress as Server-Sent Events, then a final ``done`` with the spec.
+        """
+        qs = qs or {}
         ctype = self.headers.get("Content-Type", "")
         data = self._read_bounded(config.MAX_UPLOAD_BYTES * 3)
         if data is None:
@@ -441,9 +448,55 @@ class Handler(BaseHTTPRequestHandler):
                 quad = None
         material = (fields.get("material") or b"auto").decode("utf-8", "replace")
         mode = (fields.get("mode") or b"single").decode("utf-8", "replace")
-        st, obj = svc.product3d(user, image, label_bytes=label, quad=quad,
-                                material=material, mode=mode)
-        return self._json(st, obj, self._cors_headers())
+
+        raw = _float(qs, "refine", float(config.PRODUCT3D_REFINE_SECONDS))
+        budget = max(config.PRODUCT3D_REFINE_MIN, min(config.PRODUCT3D_REFINE_MAX, raw))
+
+        want_stream = ("stream" in qs) or ("text/event-stream" in self.headers.get("Accept", ""))
+        if not want_stream:
+            st, obj = svc.product3d(user, image, label_bytes=label, quad=quad,
+                                    material=material, mode=mode, budget=budget)
+            return self._json(st, obj, self._cors_headers())
+        return self._sse_product3d(svc, user, image, label, quad, material, mode, budget)
+
+    def _sse_product3d(self, svc, user, image, label, quad, material, mode, budget):
+        if not security.heavy_gate.acquire(timeout=20):
+            return self._error(503, "server busy, please retry")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("Connection", "close")
+        for k, v in security.security_headers().items():
+            self.send_header(k, v)
+        for k, v in self._cors_headers().items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.close_connection = True
+
+        def emit(obj):
+            try:
+                self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode("utf-8"))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError) as exc:
+                raise _ClientGone() from exc
+
+        try:
+            st, obj = svc.product3d(user, image, label_bytes=label, quad=quad,
+                                    material=material, mode=mode, budget=budget,
+                                    on_progress=emit)
+            if st == 200:
+                emit({"type": "done", "spec": obj})
+            else:
+                emit({"type": "error", "error": obj.get("error", "failed")})
+        except _ClientGone:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            try:
+                emit({"type": "error", "error": f"{type(exc).__name__}"})
+            except Exception:  # noqa: BLE001
+                pass
+        finally:
+            security.heavy_gate.release()
 
     def do_DELETE(self):
         parsed = urlparse(self.path)

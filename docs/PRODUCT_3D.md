@@ -50,6 +50,27 @@ and every result states that the back/hidden side is **inferred**. Before export
 UI surfaces: label source, material hint (to confirm — transparency/reflections),
 and confidence. Plural/backside geometry is always labelled approximate.
 
+## Refine budget (it should NOT be instant)
+
+Like the 2D vectorizer's refine, the reconstruction runs a **real, time-boxed
+refinement** and only returns when the budget is spent:
+
+- `?refine=<seconds>` (or the **Refine effort** slider in the studio), clamped to
+  `PRODUCT3D_REFINE_MIN`..`PRODUCT3D_REFINE_MAX` (10-120 s, default 30).
+- `?stream=1` (what the studio uses) streams **Server-Sent Events**: a
+  `progress` event per stage/iteration (`stage`, `pct`, `elapsed`, `budget`),
+  then a final `done` with the spec. Without `stream`, the same pipeline returns
+  JSON (used by tests/API).
+- The budget is spent on genuine work, not a sleep:
+  - **cutout**: iterative guided-filter alpha matting (hundreds of passes at 30 s)
+    snapping the mask to real image edges so transparent edges/reflections survive,
+  - **profile**: iterative smoothing/fit (128 points at high budget),
+  - **label**: structure-based band detection + iterative unsharp enhancement.
+
+The `work` block in the response reports `used_s`, `cutout_iterations`,
+`cutout_edge_score`, `profile_points` and `profile_fit_rmse`. `budget=0` runs a
+fast pass (used by the unit tests).
+
 ## Environments
 
 - **Control plane (Render)** — CPU: cutout, silhouette analysis, label rectification,

@@ -225,7 +225,8 @@ class AIService:
 
     # ---- Product photo -> 3D (parametric, CPU, label-accurate) ----------
     def product3d(self, user_id: str, image_bytes: bytes, label_bytes: bytes = None,
-                  quad=None, material: str = "auto", mode: str = "single"):
+                  quad=None, material: str = "auto", mode: str = "single",
+                  budget: float = 0.0, on_progress=None):
         from ..security import validate_image
         _fmt, reason = validate_image(image_bytes)
         if reason:
@@ -233,7 +234,8 @@ class AIService:
         from . import product3d as p3d
         try:
             spec = p3d.analyze_product(image_bytes, label_bytes=label_bytes,
-                                       quad=quad, material=material, mode=mode)
+                                       quad=quad, material=material, mode=mode,
+                                       budget=budget, on_progress=on_progress)
         except ValueError as exc:
             return 422, {"error": str(exc)}
         except Exception as exc:  # noqa: BLE001

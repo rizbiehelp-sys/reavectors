@@ -17,10 +17,12 @@ const statusEl = $("status"), drop = $("drop"), photoInput = $("photo");
 const labelInput = $("label"), backInput = $("back"), sideInput = $("side");
 const modeSel = $("mode"), extraWrapper = $("extraWrapper"), materialSel = $("material");
 const wrapEl = $("wrap"), rotEl = $("rot"), wrapOut = $("wrapOut"), rotOut = $("rotOut");
+const refineEl = $("refine"), refineOut = $("refineOut");
 const wireEl = $("wire"), gridEl = $("grid"), bgEl = $("bg");
 const buildBtn = $("build"), resetBtn = $("resetCam"), exportBtn = $("exportGlb");
 const emptyEl = $("empty"), viewport = $("viewport"), meshStats = $("meshStats");
 const overlay = $("progress3d"), overlayText = $("overlayText"), report = $("report");
+const overlaySub = $("overlaySub"), barFill = $("barFill");
 const thumbOrig = $("thumbOrig"), thumbCut = $("thumbCut"), thumbLabel = $("thumbLabel");
 const API_KEY = (document.querySelector('meta[name="reavectors-key"]')?.content || "").trim();
 
@@ -45,6 +47,7 @@ modeSel.addEventListener("change", () => { extraWrapper.hidden = modeSel.value !
   wrapOut.textContent = wrapEl.value + "\u00b0"; rotOut.textContent = rotEl.value + "\u00b0";
   if (currentSpec) renderProduct(currentSpec);
 }));
+refineEl.addEventListener("input", () => { refineOut.textContent = refineEl.value + " s"; });
 materialSel.addEventListener("change", () => { if (currentSpec) renderProduct(currentSpec); });
 wireEl.addEventListener("change", () => { if (productGroup) productGroup.traverse((o) => { if (o.isMesh && o.material) o.material.wireframe = wireEl.checked; }); });
 gridEl.addEventListener("change", () => { if (grid) grid.visible = gridEl.checked; });
@@ -65,10 +68,29 @@ function setPhoto(file) {
 // ---------------------------------------------------------------------------
 // request
 // ---------------------------------------------------------------------------
+// read a Server-Sent Events stream and dispatch each parsed JSON event
+async function readSSE(res, onEvent) {
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of chunk.split("\n")) {
+        if (line.startsWith("data:")) { try { onEvent(JSON.parse(line.slice(5).trim())); } catch (e) { /* keepalive */ } }
+      }
+    }
+  }
+}
+
 async function buildProduct() {
   if (!photoFile || building) return;
+  const budget = Number(refineEl.value) || 30;
   building = true; buildBtn.disabled = true;
-  showOverlay("Measuring silhouette + rectifying label…");
+  overlayText.textContent = "Starting…"; overlaySub.textContent = `0 s / ${budget} s`;
+  barFill.style.width = "0%"; overlay.hidden = false;
   await raf();
   try {
     const fd = new FormData();
@@ -82,16 +104,32 @@ async function buildProduct() {
     fd.append("mode", modeSel.value);
     const headers = {};
     if (API_KEY) headers["X-API-Key"] = API_KEY;
-    const res = await fetch("/api/ai/product3d", { method: "POST", headers, body: fd });
-    const spec = await res.json();
-    if (!res.ok) throw new Error(spec.error || `HTTP ${res.status}`);
+    const res = await fetch(`/api/ai/product3d?stream=1&refine=${budget}`, { method: "POST", headers, body: fd });
+    if (!res.ok || !res.body) throw new Error(await res.text() || `HTTP ${res.status}`);
+
+    let spec = null, errMsg = null;
+    await readSSE(res, (ev) => {
+      if (ev.type === "progress") {
+        overlayText.textContent = ev.stage || "Working…";
+        overlaySub.textContent = `${(ev.elapsed ?? 0)} s / ${(ev.budget ?? budget)} s`;
+        barFill.style.width = (ev.pct || 0) + "%";
+      } else if (ev.type === "done") {
+        spec = ev.spec; barFill.style.width = "100%";
+      } else if (ev.type === "error") {
+        errMsg = ev.error || "failed";
+      }
+    });
+    if (errMsg) throw new Error(errMsg);
+    if (!spec) throw new Error("no result returned");
+
     currentSpec = spec;
     thumbCut.src = spec.previews.cutout;
     thumbLabel.src = spec.label.image;
     await renderProduct(spec);
     showReport(spec);
     exportBtn.disabled = false;
-    statusEl.textContent = `Reconstructed a ${spec.package.type} · confidence ${spec.quality.confidence}.`;
+    const wk = spec.work || {};
+    statusEl.textContent = `Reconstructed a ${spec.package.type} · confidence ${spec.quality.confidence} · ${wk.used_s ?? "?"}s (${wk.cutout_iterations ?? "?"} matting passes).`;
   } catch (err) {
     statusEl.textContent = "Error: " + (err.message || err);
   } finally {
@@ -228,6 +266,9 @@ function showReport(spec) {
        Label: <strong>${spec.label.source === "supplied_asset" ? "your asset (verbatim)" : "rectified from photo"}</strong> ·
        Body colour <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${sw};vertical-align:-2px"></span></p>
     <p class="muted">Material hint: ${mm.body} / ${mm.cap} — ${mm.note}</p>
+    <p class="muted">Refined ${spec.work?.cutout_iterations ?? "?"} matting passes in ${spec.work?.used_s ?? "?"}s
+       · profile ${spec.work?.profile_points ?? "?"} pts · fit RMSE ${spec.work?.profile_fit_rmse ?? "?"}
+       · label confidence ${spec.label.confidence ?? "?"}</p>
     <ul>${warns}</ul>`;
   report.hidden = false;
 }

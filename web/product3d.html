@@ -21,6 +21,9 @@
     .guide { font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:8px; padding:8px 10px; margin-top:6px; }
     .row { display:grid; gap:8px; }
     .extra[hidden] { display:none; }
+    .bar { height:6px; border-radius:999px; background:#1b2230; overflow:hidden; margin-top:8px; width:100%; }
+    .bar > div { height:100%; width:0%; background:var(--accent); transition:width .25s ease; }
+    .progress .spinner { margin-bottom:10px; }
   </style>
 </head>
 <body>
@@ -70,6 +73,9 @@
             <option value="metal">Metal</option>
           </select>
         </label>
+        <label>Refine effort <output id="refineOut">30 s</output>
+          <input id="refine" type="range" min="10" max="120" step="5" value="30" />
+        </label>
         <label>Label wrap <output id="wrapOut">180&deg;</output>
           <input id="wrap" type="range" min="40" max="360" value="180" />
         </label>
@@ -96,7 +102,11 @@
         <div class="empty" id="empty">Your parametric product appears here.<br />
           <small>Rotate &middot; zoom &middot; pan &middot; export GLB. Hidden side is inferred.</small></div>
         <div class="progress" id="progress3d" hidden><div class="spinner"></div>
-          <div class="progress-text"><strong id="overlayText">Reconstructing…</strong></div></div>
+          <div class="progress-text">
+            <strong id="overlayText">Reconstructing…</strong>
+            <span id="overlaySub"></span>
+            <div class="bar"><div id="barFill"></div></div>
+          </div></div>
       </div>
 
       <div class="thumbs">
