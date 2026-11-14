@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="reavectors-key" content="__REAVECTORS_API_KEY__" />
+  <title>ReaVector Product 3D Studio — product photo to 3D</title>
+  <link rel="stylesheet" href="/styles.css?v=6" />
+  <style>
+    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0 0; }
+    .thumb { border:1px solid var(--line); border-radius:10px; padding:8px; background:var(--panel-2); }
+    .thumb .cap { font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+    .thumb img { width:100%; height:110px; object-fit:contain; background:#0d1117; border-radius:6px; display:block; }
+    .report { margin-top:12px; border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--panel-2); font-size:13px; }
+    .report h4 { margin:0 0 8px; font-size:13px; }
+    .report ul { margin:8px 0 0 18px; padding:0; color:var(--muted); }
+    .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); }
+    .badge.high { color:#34d3c0; border-color:#34d3c0; }
+    .badge.medium { color:#e3b341; border-color:#e3b341; }
+    .badge.low { color:#f85149; border-color:#f85149; }
+    .guide { font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:8px; padding:8px 10px; margin-top:6px; }
+    .row { display:grid; gap:8px; }
+    .extra[hidden] { display:none; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><strong>reavectors</strong><span class="tag">Product 3D Studio</span></div>
+    <nav class="nav">
+      <a href="/">2D Vectorizer</a>
+      <a href="/studio3d.html">3D Studio</a>
+      <a href="/product3d.html" class="active">Product 3D</a>
+    </nav>
+    <span class="pill"><span id="serverVersion">photo &rarr; parametric 3D</span></span>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div id="drop" class="drop" tabindex="0">
+        <input id="photo" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">&#9673;</div>
+          <p class="drop-title">Drop a product photo</p>
+          <p class="drop-sub">or click &middot; JPG / PNG / WebP (RAW exported to JPG)</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>Mode
+          <select id="mode">
+            <option value="single" selected>Single photo — attractive approximation</option>
+            <option value="high_fidelity">High-fidelity — front + back + side</option>
+          </select>
+        </label>
+        <div id="extraWrapper" class="extra row" hidden>
+          <div class="guide">Capture guide: shoot each view straight-on, even light, plain
+            background, product filling the frame. Front is required; back &amp; side add evidence
+            for real label wrapping and less inferred geometry.</div>
+          <label>Back photo <input id="back" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+          <label>Side photo <input id="side" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+        </div>
+        <label>Label artwork (optional, best accuracy)
+          <input id="label" type="file" accept="image/png,image/svg+xml,image/jpeg" />
+        </label>
+        <label>Body material
+          <select id="material">
+            <option value="auto" selected>Auto-detect (hint)</option>
+            <option value="plastic">Opaque plastic</option>
+            <option value="glass">Glass / transparent</option>
+            <option value="metal">Metal</option>
+          </select>
+        </label>
+        <label>Label wrap <output id="wrapOut">180&deg;</output>
+          <input id="wrap" type="range" min="40" max="360" value="180" />
+        </label>
+        <label>Label rotate <output id="rotOut">0&deg;</output>
+          <input id="rot" type="range" min="-180" max="180" value="0" />
+        </label>
+        <label class="check"><input id="wire" type="checkbox" /> Wireframe</label>
+        <label class="check"><input id="grid" type="checkbox" checked /> Show grid</label>
+        <label>Background <input id="bg" type="color" value="#0d1117" /></label>
+      </div>
+
+      <div class="actions">
+        <button id="build" class="primary" disabled>Reconstruct 3D</button>
+        <button id="resetCam">Reset camera</button>
+        <button id="exportGlb" disabled>Download .glb</button>
+      </div>
+      <p id="status" class="status">Load a product photo to begin. Branding is taken from your
+        photo/label — never re-generated.</p>
+    </section>
+
+    <section class="stage">
+      <div class="stage-head"><span>Reconstructed product</span><span id="meshStats" class="muted"></span></div>
+      <div class="viewport" id="viewport">
+        <div class="empty" id="empty">Your parametric product appears here.<br />
+          <small>Rotate &middot; zoom &middot; pan &middot; export GLB. Hidden side is inferred.</small></div>
+        <div class="progress" id="progress3d" hidden><div class="spinner"></div>
+          <div class="progress-text"><strong id="overlayText">Reconstructing…</strong></div></div>
+      </div>
+
+      <div class="thumbs">
+        <div class="thumb"><div class="cap">Original</div><img id="thumbOrig" alt="" /></div>
+        <div class="thumb"><div class="cap">Cutout</div><img id="thumbCut" alt="" /></div>
+        <div class="thumb"><div class="cap">Label (rectified)</div><img id="thumbLabel" alt="" /></div>
+      </div>
+
+      <div class="report" id="report" hidden></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><strong>Product photo &rarr; 3D.</strong> Mesh is <em>parametric</em> packaging (LatheGeometry)
+       measured from your photo; the label is the <strong>original artwork</strong>, perspective-corrected —
+       brand names, logos and text are never AI-invented. Geometry behind the visible view is
+       <strong>inferred</strong>. For true AI surface reconstruction (TripoSR / SF3D) the GPU worker is required.</p>
+  </footer>
+
+  <script src="/boot-check.js?v=1" defer></script>
+  <script type="module" src="/product3d.js?v=1"></script>
+</body>
+</html>

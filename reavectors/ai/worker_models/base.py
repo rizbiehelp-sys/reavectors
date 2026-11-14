@@ -89,8 +89,15 @@ class ModelManager:
 
 
 def build_default_manager(cache_dir: str = "./models") -> ModelManager:
-    """Register the available adapters (imported lazily so torch isn't needed here)."""
+    """
+    Register the available adapters (imported lazily so torch isn't needed here).
+
+    Default production model is ``triposr`` (MIT, fully free). ``sf3d`` is opt-in:
+    higher detail but under the Stability AI Community License (commercial only
+    below $1M revenue). The same adapters run unchanged on Kaggle and AWS.
+    """
     from .triposr import TripoSRAdapter
     return ModelManager({
         "triposr": lambda: TripoSRAdapter(cache_dir=cache_dir),
+        "sf3d": lambda: __import__("reavectors.ai.worker_models.sf3d", fromlist=["SF3DAdapter"]).SF3DAdapter(cache_dir=cache_dir),
     })

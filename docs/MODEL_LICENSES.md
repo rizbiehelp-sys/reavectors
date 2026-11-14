@@ -26,10 +26,10 @@ GPU worker targets (`reavectors/ai/worker_models/triposr.py`).
 | Feature | Model (candidate) | Code licence | Weights licence | Hosted-service allowed? | Status |
 |---|---|---|---|---|---|
 | Text→Image | **SDXL Base 1.0** (fp16) | stability-ai/generative-models (VERIFY version) | **CreativeML OpenRAIL++-M** (VERIFY exact) | OpenRAIL permits hosting **with use restrictions** — review | VERIFY |
-| Image→3D | **TripoSR** | MIT (VERIFY repo) | VERIFY checkpoint terms (weights ≠ code) | VERIFY | VERIFY |
+| Image→3D | **TripoSR** | **MIT** (confirmed) | **MIT** (code + weights + demo) | Permitted (MIT) | **adapter live** |
 | Image→Video | **LTX-Video 2B distilled** | VERIFY repo | VERIFY (distilled weights may differ) | VERIFY | VERIFY |
 | Text→Video | **Wan 2.1 1.3B T2V** | VERIFY repo | VERIFY | VERIFY | VERIFY |
-| Image→3D (later) | SF3D | VERIFY | VERIFY | VERIFY | VERIFY |
+| Image→3D (opt-in) | **SF3D** (`stabilityai/stable-fast-3d`) | VERIFY repo | **Stability AI Community License** (free personal + commercial < USD 1M revenue; enterprise above) | Permitted under Community License — review before >$1M | **adapter live** |
 
 Verification checklist per model (fill in before enabling):
 

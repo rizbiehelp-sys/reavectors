@@ -9,6 +9,11 @@ samples/sample-logo.png
 .venv/
 venv/
 
+# GPU worker / model artifacts (never commit weights or benchmark outputs)
+models/
+bench/out/
+bench/results/
+
 # never commit real secrets (the .env.example template IS tracked)
 .env
 .env.*

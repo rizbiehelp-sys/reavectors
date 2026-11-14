@@ -82,6 +82,31 @@ def _float(qs, name, default):
         return default
 
 
+def _parse_multipart(body: bytes, boundary: str) -> "dict[str, bytes]":
+    """Minimal multipart/form-data parser -> {field_name: raw_bytes}."""
+    delim = b"--" + boundary.encode("latin-1")
+    fields: "dict[str, bytes]" = {}
+    for part in body.split(delim):
+        part = part.strip(b"\r\n")
+        if not part or part == b"--":
+            continue
+        if part.endswith(b"--"):
+            part = part[:-2].rstrip(b"\r\n")
+        if b"\r\n\r\n" not in part:
+            continue
+        head, _, content = part.partition(b"\r\n\r\n")
+        name = None
+        for line in head.split(b"\r\n"):
+            if line.lower().startswith(b"content-disposition"):
+                for seg in line.split(b";"):
+                    seg = seg.strip()
+                    if seg.startswith(b"name="):
+                        name = seg[5:].strip(b'"').decode("latin-1", "replace")
+        if name:
+            fields[name] = content
+    return fields
+
+
 class _ClientGone(Exception):
     """Raised when the client closes a streaming connection mid-refine."""
 
@@ -184,7 +209,11 @@ class Handler(BaseHTTPRequestHandler):
             }.get(os.path.splitext(full)[1], "application/octet-stream")
             try:
                 with open(full, "rb") as f:
-                    return self._send(200, f.read(), ctype)
+                    body = f.read()
+                if ctype.startswith("text/html"):
+                    # keep the bundled UI working when an API key is configured
+                    body = body.decode("utf-8").replace("__REAVECTORS_API_KEY__", config.API_KEY).encode("utf-8")
+                return self._send(200, body, ctype)
             except OSError:
                 pass
         return self._error(404, "not found")
@@ -349,6 +378,8 @@ class Handler(BaseHTTPRequestHandler):
                     st, obj = svc.get(user, parts[1], admin)
                     return self._json(st, obj)
             elif method == "POST":
+                if parts == ["product3d"]:
+                    return self._product3d(svc, user)
                 if parts == ["3d"]:
                     data = self._read_bounded(config.MAX_UPLOAD_BYTES)
                     if data is None:
@@ -381,6 +412,38 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(404, "unknown AI endpoint")
         except Exception as exc:  # noqa: BLE001
             return self._error(500, f"{type(exc).__name__}")
+
+    def _product3d(self, svc, user):
+        """Multipart: image (required) + label (optional) + quad/material/mode."""
+        ctype = self.headers.get("Content-Type", "")
+        data = self._read_bounded(config.MAX_UPLOAD_BYTES * 3)
+        if data is None:
+            return self._error(413, "upload too large")
+        if "multipart/form-data" not in ctype:
+            return self._error(415, "expected multipart/form-data")
+        boundary = None
+        for part in ctype.split(";"):
+            part = part.strip()
+            if part.startswith("boundary="):
+                boundary = part[len("boundary="):].strip().strip('"')
+        if not boundary:
+            return self._error(400, "missing multipart boundary")
+        fields = _parse_multipart(data, boundary)
+        image = fields.get("image")
+        if not image:
+            return self._error(400, "missing 'image' field")
+        label = fields.get("label")
+        quad = None
+        if fields.get("quad"):
+            try:
+                quad = json.loads(fields["quad"].decode("utf-8"))
+            except Exception:  # noqa: BLE001
+                quad = None
+        material = (fields.get("material") or b"auto").decode("utf-8", "replace")
+        mode = (fields.get("mode") or b"single").decode("utf-8", "replace")
+        st, obj = svc.product3d(user, image, label_bytes=label, quad=quad,
+                                material=material, mode=mode)
+        return self._json(st, obj, self._cors_headers())
 
     def do_DELETE(self):
         parsed = urlparse(self.path)

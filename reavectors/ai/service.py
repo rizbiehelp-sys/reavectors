@@ -223,6 +223,23 @@ class AIService:
             except OSError:
                 pass
 
+    # ---- Product photo -> 3D (parametric, CPU, label-accurate) ----------
+    def product3d(self, user_id: str, image_bytes: bytes, label_bytes: bytes = None,
+                  quad=None, material: str = "auto", mode: str = "single"):
+        from ..security import validate_image
+        _fmt, reason = validate_image(image_bytes)
+        if reason:
+            return 415, {"error": reason}
+        from . import product3d as p3d
+        try:
+            spec = p3d.analyze_product(image_bytes, label_bytes=label_bytes,
+                                       quad=quad, material=material, mode=mode)
+        except ValueError as exc:
+            return 422, {"error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            return 500, {"error": f"{type(exc).__name__}: {exc}"}
+        return 200, spec
+
     def result_file(self, job_id: str, user_id: str):
         """Return (path, None) for the caller's GLB result, or (None, error)."""
         job = self.store.get_job(job_id)
