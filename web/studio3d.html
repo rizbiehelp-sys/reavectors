@@ -33,6 +33,17 @@
       </div>
 
       <div class="controls">
+        <label>Quality (speed vs smooth)
+          <select id="quality">
+            <option value="low">Low — fastest</option>
+            <option value="medium" selected>Medium — balanced</option>
+            <option value="high">High — smoothest</option>
+          </select>
+        </label>
+        <label>Image colours <output id="colorsOut">8</output>
+          <input id="colors" type="range" min="2" max="24" value="8" />
+        </label>
+        <label class="check"><input id="srcColors" type="checkbox" checked /> Use the image's own colours</label>
         <label>Extrusion depth <output id="depthOut">20</output>
           <input id="depth" type="range" min="1" max="200" value="20" />
         </label>
@@ -72,17 +83,23 @@
       </div>
       <div class="viewport" id="viewport">
         <div class="empty" id="empty">Your extruded 3D model appears here.<br />
-          <small>Runs entirely in your browser — no GPU, no upload of the 3D work.</small></div>
+          <small>Browser extrusion (fast, offline). For true AI image&rarr;3D, the GPU model is required.</small></div>
+        <div class="progress" id="progress3d" hidden>
+          <div class="spinner"></div>
+          <div class="progress-text"><strong id="overlayText">Working…</strong></div>
+        </div>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <p>PNG/SVG → 3D extrusion runs <strong>client-side</strong> (Three.js + ExtrudeGeometry).
-       PNG vectorisation reuses the existing CPU vectorizer. No GPU is started for this tool.</p>
+    <p><strong>This is silhouette extrusion</strong> — it gives the shape real depth and the
+       image's colours, but it is <strong>not</strong> AI image-to-3D reconstruction
+       (a true 3D bottle from one photo needs the GPU model, currently disabled).
+       Runs client-side (Three.js + ExtrudeGeometry); PNG vectorisation reuses the CPU vectorizer.</p>
   </footer>
 
   <script src="/boot-check.js?v=1" defer></script>
-  <script type="module" src="/studio3d.js?v=7"></script>
+  <script type="module" src="/studio3d.js?v=8"></script>
 </body>
 </html>
