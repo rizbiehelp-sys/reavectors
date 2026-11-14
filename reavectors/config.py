@@ -120,6 +120,17 @@ AI_ENABLE_TRIPO = os.environ.get("AI_ENABLE_TRIPO", "0") == "1"
 AI_TRIPO_MODEL = os.environ.get("AI_TRIPO_MODEL", "v3.1-20260211").strip()
 AI_TRIPO_TEXTURE_QUALITY = os.environ.get("AI_TRIPO_TEXTURE_QUALITY", "standard").strip()
 AI_TRIPO_MAX_USD_PER_JOB = _float("AI_TRIPO_MAX_USD_PER_JOB", 0.35)   # per-job cost guard
+
+# --- 3D AI Studio hosted Hunyuan 3D (PAID credits; opt-in, OFF by default) ---
+AI_ENABLE_3DAS = os.environ.get("AI_ENABLE_3DAS", "0") == "1"
+AI_3DAS_API_KEY = os.environ.get("AI_3DAS_API_KEY", "").strip()
+AI_3DAS_BASE = os.environ.get("AI_3DAS_BASE", "https://api.3daistudio.com").strip()
+AI_3DAS_MODEL = os.environ.get("AI_3DAS_MODEL", "3.1").strip()
+AI_3DAS_ENABLE_PBR = os.environ.get("AI_3DAS_ENABLE_PBR", "1") == "1"
+AI_3DAS_FACE_COUNT = _int("AI_3DAS_FACE_COUNT", 500_000)
+AI_3DAS_MAX_DAILY_JOBS = _int("AI_3DAS_MAX_DAILY_JOBS", 5)      # credit-safety cap
+AI_3DAS_TIMEOUT = _int("AI_3DAS_TIMEOUT", 30)
+AI_3DAS_ASSET_HOSTS = os.environ.get("AI_3DAS_ASSET_HOSTS", "3daistudio.com").strip()
 AI_ALLOW_PAID_FALLBACK = os.environ.get("AI_ALLOW_PAID_FALLBACK", "0") == "1"
 AI_ADMIN_KEY = os.environ.get("AI_ADMIN_KEY", "").strip()
 

@@ -11,6 +11,7 @@
 import * as THREE from "/vendor/three/three.module.js";
 import { OrbitControls } from "/vendor/three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "/vendor/three/addons/exporters/GLTFExporter.js";
+import { GLTFLoader } from "/vendor/three/addons/loaders/GLTFLoader.js";
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $("status"), drop = $("drop"), photoInput = $("photo");
@@ -23,6 +24,8 @@ const buildBtn = $("build"), resetBtn = $("resetCam"), exportBtn = $("exportGlb"
 const emptyEl = $("empty"), viewport = $("viewport"), meshStats = $("meshStats");
 const overlay = $("progress3d"), overlayText = $("overlayText"), report = $("report");
 const overlaySub = $("overlaySub"), barFill = $("barFill");
+const hModel = $("hModel"), hType = $("hType"), hPbr = $("hPbr");
+const hGenerate = $("hGenerate"), hStatus = $("hStatus"), hBar = $("hBar"), hDownload = $("hDownload");
 const thumbOrig = $("thumbOrig"), thumbCut = $("thumbCut"), thumbLabel = $("thumbLabel");
 const API_KEY = (document.querySelector('meta[name="reavectors-key"]')?.content || "").trim();
 
@@ -62,7 +65,97 @@ function setPhoto(file) {
   origUrl = URL.createObjectURL(file);
   thumbOrig.src = origUrl;
   buildBtn.disabled = false;
+  hGenerate.disabled = false;
   statusEl.textContent = `Loaded ${file.name}. ${modeSel.value === "high_fidelity" ? "Add back/side views, then reconstruct." : "Ready — reconstruct."}`;
+}
+
+// ---------------------------------------------------------------------------
+// hosted Hunyuan Pro (3D AI Studio) - paid credits, opt-in on the server
+// ---------------------------------------------------------------------------
+hGenerate.addEventListener("click", () => generateHosted());
+
+async function generateHosted() {
+  if (!photoFile) return;
+  hGenerate.disabled = true;
+  hBar.style.width = "0%";
+  hDownload.style.display = "none";
+  hStatus.textContent = "Submitting to Hunyuan Pro…";
+  try {
+    const fd = new FormData();
+    fd.append("image", photoFile);
+    if (backInput.files[0]) fd.append("back", backInput.files[0]);
+    if (sideInput.files[0]) fd.append("side", sideInput.files[0]);
+    fd.append("model", hModel.value);
+    fd.append("generate_type", hType.value);
+    fd.append("enable_pbr", hPbr.checked ? "1" : "0");
+    const headers = {};
+    if (API_KEY) headers["X-API-Key"] = API_KEY;
+    const res = await fetch("/api/ai/product3d/hosted", { method: "POST", headers, body: fd });
+    const sub = await res.json();
+    if (!res.ok) throw new Error(sub.error || `HTTP ${res.status}`);
+    hStatus.textContent = `Queued (${sub.model}, ~${sub.credits} credits). Pro takes 3–6 min…`;
+    pollHosted(sub.task_id);
+  } catch (err) {
+    hStatus.textContent = "Hosted error: " + (err.message || err);
+    hGenerate.disabled = false;
+  }
+}
+
+async function pollHosted(taskId) {
+  const headers = {};
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  for (let i = 0; i < 90; i++) {
+    await new Promise((r) => setTimeout(r, 6000));
+    try {
+      const r = await fetch(`/api/ai/product3d/hosted/${encodeURIComponent(taskId)}`, { headers });
+      const s = await r.json();
+      if (!r.ok) throw new Error(s.error || `HTTP ${r.status}`);
+      if (typeof s.progress === "number") hBar.style.width = `${s.progress}%`;
+      hStatus.textContent = `${s.status} · ${s.progress ?? 0}%`;
+      if (s.status === "FINISHED") {
+        const asset = (s.results || []).find((x) => x.asset_type === "3D_MODEL") || (s.results || [])[0];
+        if (!asset || !asset.asset) throw new Error("no asset returned");
+        await loadHostedGlb(asset.asset);
+        hStatus.textContent = "Hunyuan Pro result loaded — rotate/zoom, or download.";
+        hBar.style.width = "100%";
+        hGenerate.disabled = false;
+        return;
+      }
+      if (s.status === "FAILED" || s.failure_reason) {
+        throw new Error(s.failure_reason || "generation failed");
+      }
+    } catch (err) {
+      hStatus.textContent = "Hosted error: " + (err.message || err);
+      hGenerate.disabled = false;
+      return;
+    }
+  }
+  hStatus.textContent = "Timed out waiting for the hosted job.";
+  hGenerate.disabled = false;
+}
+
+function loadHostedGlb(assetUrl) {
+  // fetch through our SSRF-guarded proxy (same-origin, no CORS issues)
+  const proxy = `/api/ai/product3d/hosted/asset?url=${encodeURIComponent(assetUrl)}`;
+  hDownload.href = proxy;
+  hDownload.style.display = "inline-block";
+  return new Promise((resolve, reject) => {
+    new GLTFLoader().load(proxy, (gltf) => {
+      disposeGroup(productGroup);
+      productGroup.add(gltf.scene);
+      // frame the model
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      gltf.scene.position.sub(center);
+      const maxd = Math.max(size.x, size.y, size.z) || 1;
+      camera.position.set(0, maxd * 0.15, maxd * 2.2);
+      controls.target.set(0, 0, 0); controls.update();
+      emptyEl.hidden = true;
+      meshStats.textContent = "Hunyuan Pro GLB";
+      resolve();
+    }, undefined, reject);
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -242,6 +242,61 @@ class AIService:
             return 500, {"error": f"{type(exc).__name__}: {exc}"}
         return 200, spec
 
+    # ---- Hosted 3D (3D AI Studio / Hunyuan Pro) - opt-in, PAID credits ----
+    def hosted3d_enabled(self) -> bool:
+        return bool(config.AI_ENABLE_3DAS and config.AI_3DAS_API_KEY)
+
+    def _hosted_count(self) -> int:
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        if getattr(self, "_h3d_day", None) != today:
+            self._h3d_day = today
+            self._h3d_count = 0
+        return getattr(self, "_h3d_count", 0)
+
+    def hosted3d_submit(self, user_id: str, image_bytes: bytes, model: str = None,
+                        enable_pbr=None, generate_type: str = None, multi_view_images=None):
+        import base64
+        if not self.hosted3d_enabled():
+            return 503, {"error": "hosted 3D is disabled (set AI_ENABLE_3DAS=1 and AI_3DAS_API_KEY)"}
+        from ..security import validate_image
+        fmt, reason = validate_image(image_bytes)
+        if reason:
+            return 415, {"error": reason}
+        cap = config.AI_3DAS_MAX_DAILY_JOBS
+        if self._hosted_count() >= cap:
+            return 429, {"error": f"daily hosted-3D cap reached ({cap}); resets at midnight"}
+        from .threedaistudio import ThreeDAIStudioClient, ThreeDAIStudioError
+        client = ThreeDAIStudioClient(config.AI_3DAS_API_KEY, config.AI_3DAS_BASE,
+                                      timeout=config.AI_3DAS_TIMEOUT)
+        model = model or config.AI_3DAS_MODEL
+        pbr = config.AI_3DAS_ENABLE_PBR if enable_pbr is None else bool(enable_pbr)
+        ext = (fmt or "PNG").lower().replace("jpeg", "jpeg")
+        img_url = f"data:image/{ext};base64," + base64.b64encode(image_bytes).decode("ascii")
+        try:
+            res = client.submit_pro(
+                image=None if multi_view_images else img_url,
+                multi_view=multi_view_images or None, model=model, enable_pbr=pbr,
+                face_count=config.AI_3DAS_FACE_COUNT, generate_type=generate_type or "Normal")
+        except ThreeDAIStudioError as exc:
+            code = 402 if exc.code == 402 else (429 if exc.code == 429 else 502)
+            return code, {"error": exc.message}
+        self._h3d_count = self._hosted_count() + 1
+        return 200, {"task_id": res.get("task_id"), "provider": "3daistudio",
+                     "model": model, "enable_pbr": pbr,
+                     "credits": ThreeDAIStudioClient.credits(model, pbr, bool(multi_view_images))}
+
+    def hosted3d_status(self, user_id: str, task_id: str):
+        if not self.hosted3d_enabled():
+            return 503, {"error": "hosted 3D is disabled"}
+        from .threedaistudio import ThreeDAIStudioClient, ThreeDAIStudioError
+        client = ThreeDAIStudioClient(config.AI_3DAS_API_KEY, config.AI_3DAS_BASE,
+                                      timeout=config.AI_3DAS_TIMEOUT)
+        try:
+            return 200, client.status(task_id)
+        except ThreeDAIStudioError as exc:
+            return 502, {"error": exc.message}
+
     def result_file(self, job_id: str, user_id: str):
         """Return (path, None) for the caller's GLB result, or (None, error)."""
         job = self.store.get_job(job_id)
