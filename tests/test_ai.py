@@ -1,5 +1,5 @@
-"""
-Tests for the AI Studio backend (Phase 2). No AWS, no GPU — the mock provider
+﻿"""
+Tests for the AI Studio backend (Phase 2). No AWS, no GPU â€” the mock provider
 drives the full lifecycle deterministically.
 
 Run:  python tests/test_ai.py     (or)   python -m pytest tests/test_ai.py
@@ -173,62 +173,74 @@ def test_catalog_licenses_not_enabled_by_default():
         assert m["enabled"] is False
 
 
+def _patch_cfg(**kw):
+    import reavectors.config as c
+    old = {k: getattr(c, k) for k in kw}
+    for k, v in kw.items():
+        setattr(c, k, v)
+    return old, c
+
+
 def test_tripo_requires_secret_key():
-    from reavectors.ai.tripo import TripoClient, TripoAuthError
-    try:
-        TripoClient(api_key="tcli_abc123")   # client id, not a secret key
-        assert False, "should reject a tcli_ client id"
-    except TripoAuthError:
-        pass
-    try:
-        TripoClient(api_key="")
-        assert False, "should reject empty key"
-    except TripoAuthError:
-        pass
-
-
-def test_tripo_flow_with_fake_transport():
     from reavectors.ai import tripo
-    seen = []
-
-    def transport(method, url, headers, body, timeout):
-        seen.append((method, url))
-        if url.endswith("/upload"):
-            return 200, {"code": 0, "data": {"image_token": "tok"}}
-        if url.endswith("/generation/image-to-model"):
-            return 200, {"code": 0, "data": {"task_id": "t1"}}
-        if url.endswith("/generation/t1"):
-            return 200, {"code": 0, "data": {"status": "success",
-                                             "output": {"pbr_model": "https://x/m.glb"}}}
-        return 404, {"message": "not found"}
-
-    c = tripo.TripoClient(api_key="tsk_test", transport=transport)
-    assert c.upload_image(b"\x89PNG...") == "tok"
-    assert c.create_image_to_model("tok") == "t1"
-    out = c.wait("t1", poll_seconds=0)
-    assert out["output"]["pbr_model"].endswith(".glb")
-    assert [u for _, u in seen][-1].endswith("/generation/t1")
-
-
-def test_tripo_auth_error_on_401():
-    from reavectors.ai import tripo
-    def transport(method, url, headers, body, timeout):
-        return 401, {"code": 2, "message": "Invalid API key"}
-    c = tripo.TripoClient(api_key="tsk_bad", transport=transport)
+    old, c = _patch_cfg(AI_TRIPO_API_KEY="tcli_abc123")
     try:
-        c.upload_image(b"x"); assert False
-    except tripo.TripoAuthError:
-        pass
+        try:
+            tripo._require_key(); assert False, "client id must be rejected"
+        except tripo.TripoAuthError:
+            pass
+        c.AI_TRIPO_API_KEY = ""
+        try:
+            tripo._require_key(); assert False, "empty key must be rejected"
+        except tripo.TripoAuthError:
+            pass
+        c.AI_TRIPO_API_KEY = "tsk_ok"
+        tripo._require_key()   # secret key accepted
+    finally:
+        for k, v in old.items():
+            setattr(c, k, v)
 
 
-def test_tripo_cost_guard():
+def test_tripo_cost_guard_and_classify():
     from reavectors.ai import tripo
-    tripo.check_cost(0.20)                     # under the default ceiling
+    tripo.check_cost(0.20)                       # under ceiling
     try:
-        tripo.check_cost(5.00); assert False    # over it -> blocked
+        tripo.check_cost(5.00); assert False
     except tripo.TripoError:
         pass
+    assert "credit" in tripo._classify(Exception("[2010] You don't have enough credit")).lower()
 
+
+def test_tripo_fake_async_flow():
+    import os
+    from reavectors.ai import tripo
+    old, c = _patch_cfg(AI_TRIPO_API_KEY="tsk_test", AI_ENABLE_TRIPO=True,
+                        AI_TRIPO_MAX_USD_PER_JOB=1.0)
+
+    class FakeTask:
+        status = "success"
+
+    class FakeClient:
+        def __init__(self): self.created = None
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def image_to_model(self, **kw): self.created = kw; return "t1"
+        async def wait_for_task(self, tid, **kw): return FakeTask()
+        async def download_task_models(self, task, out):
+            p = os.path.join(out, "model.glb")
+            with open(p, "wb") as fh: fh.write(b"glTF\x02\x00\x00\x00")
+            return {"pbr_model": p}
+
+    holder = {}
+    def factory():
+        cl = FakeClient(); holder["c"] = cl; return cl
+    try:
+        res = tripo.generate_glb(b"png-bytes", "x.png", _client_factory=factory)
+        assert res["glb"].startswith(b"glTF")
+        assert holder["c"].created.get("model_version")   # version was sent
+    finally:
+        for k, v in old.items():
+            setattr(c, k, v)
 
 def run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

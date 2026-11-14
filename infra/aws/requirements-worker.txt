@@ -1,0 +1,18 @@
+# reavectors GPU WORKER requirements — install ONLY on the g4dn.xlarge.
+# NEVER install these on the control plane (t3.micro) or Render.
+#
+# TripoSR (MIT, single-image -> mesh, ~6 GB VRAM) is the free "Tripo-quality" path.
+# Verified: https://github.com/VAST-AI-Research/TripoSR (MIT licence, code+weights).
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.4.1
+torchvision==0.19.1
+# TripoSR's own deps
+omegaconf
+einops
+trimesh
+huggingface_hub
+rembg                 # background removal for cleaner single-object inputs
+onnxruntime           # rembg backend
+Pillow
+numpy
+# boto3 is provided by the instance (pip install boto3) OR the base AMI

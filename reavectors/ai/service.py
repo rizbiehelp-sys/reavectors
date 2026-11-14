@@ -9,12 +9,14 @@ AWS (mock provider) and unit-testable directly.
 from __future__ import annotations
 
 import json
+import os
+import re
 import struct
 import threading
 import time
 
 from .. import config
-from . import catalog, limits
+from . import catalog, limits, tripo
 from .lifecycle import GPUManager, PENDING_STATES
 from .models import JobType, ValidationError, validate_request
 from .providers import MockGPUProvider
@@ -166,6 +168,77 @@ class AIService:
         if self.store.delete_lora(lora_id, user_id):
             return 200, {"deleted": lora_id}
         return 404, {"error": "lora not found"}
+
+    # ---- AI image -> 3D (Tripo hosted; paid, opt-in) --------------------
+    def _obj_dir(self, user_id: str, kind: str) -> str:
+        base = os.path.join(os.path.dirname(os.path.abspath(config.AI_JOB_DB_PATH)) or ".", "objects")
+        safe = re.sub(r"[^A-Za-z0-9_\-]", "_", user_id)[:64] or "anon"
+        path = os.path.join(base, "users", safe, kind)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def submit_3d(self, user_id: str, image_bytes: bytes, filename: str, params: dict):
+        from ..security import validate_image
+        _fmt, reason = validate_image(image_bytes)
+        if reason:
+            return 415, {"error": reason}
+        if not tripo.enabled():
+            return 503, {"error": "AI 3D is not enabled. Add Tripo credits (AI_TRIPO_API_KEY) "
+                                  "or connect the GPU worker (TripoSR)."}
+        try:
+            limits.check_submit(self.store, user_id, JobType.IMAGE_TO_3D, self.limiter)
+        except limits.LimitError as exc:
+            return exc.status, {"error": exc.message}
+
+        job = self.store.create_job(
+            user_id, JobType.IMAGE_TO_3D.value, config.AI_TRIPO_MODEL,
+            {"filename": filename, "provider": "tripo"},
+            deadline_seconds=config.AI_IMAGE_3D_JOB_TIMEOUT_SECONDS)
+        in_path = os.path.join(self._obj_dir(user_id, "inputs"), f"{job['id']}.png")
+        with open(in_path, "wb") as fh:
+            fh.write(image_bytes)
+        threading.Thread(target=self._run_3d, args=(job["id"], user_id, in_path),
+                         daemon=True, name="ai-3d").start()
+        return 202, {"job_id": job["id"], "state": "queued", "provider": "tripo",
+                     "eta_hint": "image-to-3D usually takes 30-120 seconds"}
+
+    def _run_3d(self, job_id: str, user_id: str, in_path: str) -> None:
+        self.store.set_state(job_id, "running", provider="tripo")
+        try:
+            with open(in_path, "rb") as fh:
+                data = fh.read()
+            res = tripo.generate_glb(data, os.path.basename(in_path))
+            out_path = os.path.join(self._obj_dir(user_id, "models"), f"{job_id}.glb")
+            with open(out_path, "wb") as fh:
+                fh.write(res["glb"])
+            self.store.set_state(job_id, "succeeded",
+                                 result_url=f"/api/ai/jobs/{job_id}/result", provider="tripo")
+        except tripo.TripoError as exc:
+            self.store.set_state(job_id, "failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self.store.set_state(job_id, "failed", error=f"{type(exc).__name__}: {exc}")
+        finally:
+            try:
+                os.remove(in_path)
+            except OSError:
+                pass
+
+    def result_file(self, job_id: str, user_id: str):
+        """Return (path, None) for the caller's GLB result, or (None, error)."""
+        job = self.store.get_job(job_id)
+        if not job or job["user_id"] != user_id:
+            return None, "job not found"
+        if job["state"] != "succeeded":
+            return None, f"job is {job['state']}"
+        path = os.path.join(self._obj_dir(user_id, "models"), f"{job_id}.glb")
+        if not os.path.isfile(path):
+            return None, "result file missing"
+        return path, None
+
+    def tripo_balance(self):
+        if not config.AI_TRIPO_API_KEY:
+            return 200, {"ok": False, "error": "AI_TRIPO_API_KEY not set"}
+        return 200, tripo.balance()
 
 
 def _inspect_safetensors(data: bytes):

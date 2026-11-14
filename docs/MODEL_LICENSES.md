@@ -5,6 +5,22 @@
 > a **tracker**, not a legal opinion. "VERIFY" means: open the linked source and
 > confirm the licence for the exact checkpoint you intend to host.
 
+## Chosen free image→3D: TripoSR (MIT)
+
+Confirmed from the official repo (2026-11): **TripoSR** (VAST-AI-Research /
+Stability AI) is released under the **MIT licence — code, pretrained weights and
+demo**. Single image → mesh, ~6 GB VRAM, <0.5 s on A100 (slower on a T4 but
+usable), optional `--bake-texture`. It is literally by the Tripo team, so it is
+the closest free "Tripo-quality" option and fits the T4. This is the model the
+GPU worker targets (`reavectors/ai/worker_models/triposr.py`).
+
+| Free option | Quality | VRAM | T4 OK? | Licence | Verdict |
+|---|---|---|---|---|---|
+| **TripoSR** | good (vertex colour; `--bake-texture`) | ~6 GB | ✅ | **MIT** | **chosen** |
+| Hunyuan3D-2.1 | higher, PBR | ~24 GB+ | partial (lite) | Tencent Hunyuan (verify) | later |
+| TRELLIS (Microsoft) | SOTA | needs Ampere+ (flash-attn) | ❌ (Turing) | MIT-ish (verify) | not on T4 |
+| LGM / Unique3D / SF3D | varies | varies | varies | verify | candidates |
+
 ## Candidate models
 
 | Feature | Model (candidate) | Code licence | Weights licence | Hosted-service allowed? | Status |

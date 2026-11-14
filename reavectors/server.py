@@ -329,10 +329,33 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, svc.loras(user)[1])
                 if parts == ["jobs", "history"]:
                     return self._json(200, svc.history(user)[1])
+                if parts == ["tripo", "balance"]:
+                    if not admin:
+                        return self._error(403, "admin only")
+                    return self._json(200, svc.tripo_balance()[1])
+                if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "result":
+                    path, err = svc.result_file(parts[1], user)
+                    if err:
+                        return self._error(404, err)
+                    try:
+                        with open(path, "rb") as fh:
+                            body = fh.read()
+                    except OSError:
+                        return self._error(500, "could not read result")
+                    return self._send(200, body, "model/gltf-binary", {
+                        "Content-Disposition": f'attachment; filename="{parts[1]}.glb"',
+                        **self._cors_headers()})
                 if len(parts) == 2 and parts[0] == "jobs":
                     st, obj = svc.get(user, parts[1], admin)
                     return self._json(st, obj)
             elif method == "POST":
+                if parts == ["3d"]:
+                    data = self._read_bounded(config.MAX_UPLOAD_BYTES)
+                    if data is None:
+                        return self._error(413, "image too large")
+                    filename = qs.get("filename", ["input.png"])[0] or "input.png"
+                    st, obj = svc.submit_3d(user, data, filename, {})
+                    return self._json(st, obj, {"Location": f"/api/ai/jobs/{obj.get('job_id','')}"})
                 if parts == ["jobs"]:
                     body = self._read_json_bounded(64 * 1024)
                     if body is None:
