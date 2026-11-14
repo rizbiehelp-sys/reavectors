@@ -173,6 +173,63 @@ def test_catalog_licenses_not_enabled_by_default():
         assert m["enabled"] is False
 
 
+def test_tripo_requires_secret_key():
+    from reavectors.ai.tripo import TripoClient, TripoAuthError
+    try:
+        TripoClient(api_key="tcli_abc123")   # client id, not a secret key
+        assert False, "should reject a tcli_ client id"
+    except TripoAuthError:
+        pass
+    try:
+        TripoClient(api_key="")
+        assert False, "should reject empty key"
+    except TripoAuthError:
+        pass
+
+
+def test_tripo_flow_with_fake_transport():
+    from reavectors.ai import tripo
+    seen = []
+
+    def transport(method, url, headers, body, timeout):
+        seen.append((method, url))
+        if url.endswith("/upload"):
+            return 200, {"code": 0, "data": {"image_token": "tok"}}
+        if url.endswith("/generation/image-to-model"):
+            return 200, {"code": 0, "data": {"task_id": "t1"}}
+        if url.endswith("/generation/t1"):
+            return 200, {"code": 0, "data": {"status": "success",
+                                             "output": {"pbr_model": "https://x/m.glb"}}}
+        return 404, {"message": "not found"}
+
+    c = tripo.TripoClient(api_key="tsk_test", transport=transport)
+    assert c.upload_image(b"\x89PNG...") == "tok"
+    assert c.create_image_to_model("tok") == "t1"
+    out = c.wait("t1", poll_seconds=0)
+    assert out["output"]["pbr_model"].endswith(".glb")
+    assert [u for _, u in seen][-1].endswith("/generation/t1")
+
+
+def test_tripo_auth_error_on_401():
+    from reavectors.ai import tripo
+    def transport(method, url, headers, body, timeout):
+        return 401, {"code": 2, "message": "Invalid API key"}
+    c = tripo.TripoClient(api_key="tsk_bad", transport=transport)
+    try:
+        c.upload_image(b"x"); assert False
+    except tripo.TripoAuthError:
+        pass
+
+
+def test_tripo_cost_guard():
+    from reavectors.ai import tripo
+    tripo.check_cost(0.20)                     # under the default ceiling
+    try:
+        tripo.check_cost(5.00); assert False    # over it -> blocked
+    except tripo.TripoError:
+        pass
+
+
 def run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

@@ -99,6 +99,16 @@ AI_JOB_DB_PATH = os.environ.get("AI_JOB_DB_PATH", os.path.join("data", "ai_jobs.
 AI_QUEUE_BACKEND = os.environ.get("AI_QUEUE_BACKEND", "sqlite").strip().lower()
 AI_S3_BUCKET = os.environ.get("AI_S3_BUCKET", "").strip()
 AI_USE_API_FALLBACK = os.environ.get("AI_USE_API_FALLBACK", "0") == "1"
+
+# --- Tripo hosted image->3D (PAID; opt-in, OFF by default) -----------------
+# Costs real credits (~20-30 credits = $0.20-$0.30 per image->3D; 1 credit = $0.01).
+# Requires a SECRET key (starts with tsk_), NOT a client_id (tcli_).
+AI_TRIPO_API_KEY = os.environ.get("AI_TRIPO_API_KEY", "").strip()
+AI_TRIPO_BASE = os.environ.get("AI_TRIPO_BASE", "https://openapi.tripo3d.ai/v3").strip().rstrip("/")
+AI_ENABLE_TRIPO = os.environ.get("AI_ENABLE_TRIPO", "0") == "1"
+AI_TRIPO_MODEL = os.environ.get("AI_TRIPO_MODEL", "v3.1-20260211").strip()
+AI_TRIPO_TEXTURE_QUALITY = os.environ.get("AI_TRIPO_TEXTURE_QUALITY", "standard").strip()
+AI_TRIPO_MAX_USD_PER_JOB = _float("AI_TRIPO_MAX_USD_PER_JOB", 0.35)   # per-job cost guard
 AI_ALLOW_PAID_FALLBACK = os.environ.get("AI_ALLOW_PAID_FALLBACK", "0") == "1"
 AI_ADMIN_KEY = os.environ.get("AI_ADMIN_KEY", "").strip()
 
