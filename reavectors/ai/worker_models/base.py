@@ -106,8 +106,13 @@ def build_default_manager(cache_dir: str = "./models") -> ModelManager:
         from .hunyuan3d import Hunyuan3DAdapter
         return Hunyuan3DAdapter(cache_dir=cache_dir)
 
+    def _hunyuan_mini():
+        from .hunyuan3d import Hunyuan3DMiniAdapter
+        return Hunyuan3DMiniAdapter(cache_dir=cache_dir)
+
     return ModelManager({
-        "triposr": lambda: TripoSRAdapter(cache_dir=cache_dir),
-        "sf3d": _sf3d,
-        "hunyuan3d": _hunyuan,   # ~24 GB - needs g5/g6, not a T4
+        "triposr": lambda: TripoSRAdapter(cache_dir=cache_dir),          # ~6 GB
+        "sf3d": _sf3d,                                                   # ~6.5 GB  (default)
+        "hunyuan3d-mini": _hunyuan_mini,                                 # ~10 GB   fits T4
+        "hunyuan3d": _hunyuan,                                           # ~24 GB   g5/g6 only
     })

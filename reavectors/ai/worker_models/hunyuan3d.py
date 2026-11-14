@@ -75,3 +75,16 @@ class Hunyuan3DAdapter:
         glb_path = os.path.join(out_dir, "model.glb")
         mesh.export(glb_path)
         return glb_path
+
+
+class Hunyuan3DMiniAdapter(Hunyuan3DAdapter):
+    """
+    Hunyuan3D-2mini — the variant that FITS a 16 GB T4 (~10 GB). Best free
+    quality we can run on the free-credit g4dn.xlarge. Same Community Licence.
+    """
+    name = "hunyuan3d-mini"
+    vram_gb = 10.0
+
+    def __init__(self, cache_dir: str = "./models", repo_dir: str = None):
+        super().__init__(cache_dir=cache_dir, repo_dir=repo_dir,
+                         variant="tencent/Hunyuan3D-2mini")

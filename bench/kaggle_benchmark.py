@@ -160,7 +160,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.list:
         for name, kind, ver, lic in ROADMAP:
-            live = "adapter-live" if name in ("triposr", "sf3d", "hunyuan3d") else "planned"
+            live = "adapter-live" if name in ("triposr", "sf3d", "hunyuan3d", "hunyuan3d-mini") else "planned"
             print(f"{name:12s} {kind:10s} {ver:42s} {lic:38s} [{live}]")
         return 0
     if not os.path.isfile(args.image):

@@ -12,15 +12,20 @@ one instance you name* — it never creates resources.
 
 ## 0. Which model / which GPU
 
-| Model | VRAM | Fits T4 (g4dn.xlarge)? | Licence | Notes |
-|---|---|---|---|---|
-| **TripoSR** | ~6 GB | ✅ | MIT | default, fastest, free |
-| **SF3D** | ~6.5 GB | ✅ | Stability AI Community | better detail; <$1M revenue |
-| **Hunyuan3D-2mini** | ~10 GB | ✅ (tight) | Tencent Hunyuan Community | mini quality bump |
-| **Hunyuan3D-2.1** | ~24 GB | ❌ needs 24 GB | Tencent Hunyuan Community | **best quality** → `g5.xlarge`/`g6.xlarge` |
+Target is fixed: **`g4dn.xlarge` (Tesla T4, 16 GB)** — free-credit friendly.
+`g5`/`g6` are **not** used, so everything must fit **16 GB**. (Hunyuan3D-2.1 needs
+~24 GB and is therefore **not runnable** on this tier — excluded.)
 
-Recommendation: start on **`g4dn.xlarge` + SF3D** (cheap, good). Move to
-**`g5.xlarge` + Hunyuan3D-2.1** only if you need Tripo-level fidelity.
+| Model | VRAM | Fits T4 (16 GB)? | Licence | Notes |
+|---|---|---|---|---|
+| **TripoSR** | ~6 GB | ✅ | MIT | lightest / fastest |
+| **SF3D** | ~6.5 GB | ✅ | Stability AI Community | **default** — best speed/quality on a T4 (<$1M revenue) |
+| **Hunyuan3D-2mini** | ~10 GB | ✅ (tight) | Tencent Hunyuan Community | **quality bump** within 16 GB |
+| ~~Hunyuan3D-2.1~~ | ~24 GB | ❌ | — | needs g5/g6 → out of scope on credits |
+
+Recommendation: **`g4dn.xlarge` + SF3D** by default; switch `AI_3D_MODEL=hunyuan3d-mini`
+for the best free fidelity a T4 can give. The manager loads one model at a time and
+frees VRAM between jobs, so a single T4 covers all of them.
 
 ---
 
@@ -62,9 +67,10 @@ Kaggle is your free dual-T4 dev box. Kaggle's terms are **personal, non-commerci
    same AZ as the instance → attach later at `/mnt/models`.
 2. **IAM role**: EC2 → Roles → create from `infra/aws/gpu-worker-iam-policy.json`
    (SQS poll + S3 put + `ec2:StopInstances` on **its own** instance). No keys on the box.
-3. **Launch instance**: `g4dn.xlarge` (or `g5.xlarge` for Hunyuan3D), **Deep Learning
-   AMI (Ubuntu)**, attach the role, **no inbound Security Group rules**, access via
-   **SSM Session Manager**.
+3. **Launch instance**: `g4dn.xlarge` (T4 16 GB), **Deep Learning AMI (Ubuntu)**,
+   attach the role, **no inbound Security Group rules**, access via **SSM Session
+   Manager**. Note: GPU instances are **not** in AWS Free Tier — this draws on your
+   credits (~$0.53/hr), which is why the instance stays **stopped** unless a job runs.
 4. **Attach + mount the EBS** and run the bootstrap once:
    ```bash
    sudo mkfs.ext4 /dev/nvme1n1 && sudo mkdir -p /mnt/models && sudo mount /dev/nvme1n1 /mnt/models

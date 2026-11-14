@@ -102,6 +102,10 @@ AI_GPU_PROVIDER = os.environ.get("AI_GPU_PROVIDER", "mock").strip().lower()   # 
 AI_ENABLE_REAL_GPU = os.environ.get("AI_ENABLE_REAL_GPU", "0") == "1"          # hard safety gate
 AI_GPU_INSTANCE_ID = os.environ.get("AI_GPU_INSTANCE_ID", "").strip()
 AI_GPU_REGION = os.environ.get("AI_GPU_REGION", "ap-southeast-2").strip()
+# Worker GPU target: free-credit friendly T4 (16 GB) only. g5/g6 are NOT used.
+AI_GPU_TYPE = os.environ.get("AI_GPU_TYPE", "g4dn.xlarge").strip()
+# Image->3D model the worker loads. Must fit 16 GB: sf3d (~6.5) or hunyuan3d-mini (~10).
+AI_3D_MODEL = os.environ.get("AI_3D_MODEL", "sf3d").strip()
 AI_JOB_DB_PATH = os.environ.get("AI_JOB_DB_PATH", os.path.join("data", "ai_jobs.db"))
 AI_QUEUE_BACKEND = os.environ.get("AI_QUEUE_BACKEND", "sqlite").strip().lower()
 AI_S3_BUCKET = os.environ.get("AI_S3_BUCKET", "").strip()
