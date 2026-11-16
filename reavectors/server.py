@@ -427,21 +427,20 @@ class Handler(BaseHTTPRequestHandler):
         from .ai.bridge import get_bridge
         # artifacts are public (the studio displays them)
         if len(parts) == 3 and parts[1] == "artifacts":
-            path = get_bridge().artifact_path(parts[2])
-            if not path:
+            name = parts[2]
+            body = get_bridge().artifact_bytes(name)
+            if body is None:
                 return self._error(404, "artifact not found")
-            ext = os.path.splitext(path)[1].lower()
+            ext = os.path.splitext(name)[1].lower()
             ctype = {".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                      ".mp4": "video/mp4", ".webm": "video/webm", ".png": "image/png",
                      ".jpg": "image/jpeg", ".zip": "application/zip"}.get(ext, "application/octet-stream")
-            try:
-                with open(path, "rb") as f:
-                    body = f.read()
-            except OSError:
-                return self._error(404, "artifact not found")
             return self._send(200, body, ctype)
         if not self._bridge_key_ok():
             return self._error(403, "bridge disabled or bad key")
+        if parts == ["bridge", "backend"]:
+            from .ai.bridge import bridge_backend
+            return self._json(200, {"backend": bridge_backend()})
         if parts == ["bridge", "kernel"]:
             from .ai import kaggle_runner
             try:
