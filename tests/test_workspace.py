@@ -23,6 +23,12 @@ def test_registry_covers_tasks():
         assert t in tasks, f"no model for task {t}"
 
 
+def test_every_task_has_gpu():
+    from reavectors.ai.scheduler import DEFAULT_TASK_GPU
+    for t in registry.TASKS:
+        assert t in DEFAULT_TASK_GPU, f"task {t} has no GPU mapping"
+
+
 def test_live_adapters_exist():
     ids = {m.id for m in registry.adapters()}
     assert {"triposr", "sf3d"} <= ids
@@ -44,12 +50,12 @@ def test_vram_guard_refuses_hunyuan_on_t4():
         pass
 
 
-def test_run_refuses_planned():
+def test_run_refuses_unknown_model():
     s = DualGPUScheduler()
     try:
-        s.run("sdxl-base-1.0", "x.png")
-        assert False, "planned model must not run"
-    except RuntimeError:
+        s.run("no-such-model", "x.png")
+        assert False, "unknown model must be refused"
+    except KeyError:
         pass
 
 

@@ -47,36 +47,36 @@ REGISTRY: list[ModelSpec] = [
               "main (VERIFY)", "CreativeML OpenRAIL++-M", "conditional (use restrictions)",
               10.0, 7.0, "fp16", 30.0, "high, mature + LoRA ecosystem",
               "1024px-native; needs LoRA for styles; safety filter per licence",
-              gpu="0"),
+              adapter="sdxl", gpu="0", status="adapter_live"),
     ModelSpec("z-image-turbo", "text2image", "Tongyi-MAI/Z-Image-Turbo",
               "main (VERIFY)", "Apache-2.0 (VERIFY)", "yes (VERIFY)",
               12.0, 12.0, "fp16/bf16", 12.0, "fast, good prompt adherence",
               "verify ops/attention on T4 (cc 7.5); bf16 may fall back to fp16",
-              gpu="0"),
+              adapter="z-image", gpu="0", status="adapter_live"),
     # ---- image editing (GPU 0) -------------------------------------------
     ModelSpec("flux-kontext-dev", "image_edit", "black-forest-labs/FLUX.1-Kontext-dev",
               "main (VERIFY)", "FLUX.1 [dev] Non-Commercial License", "no (non-commercial)",
-              16.0, 24.0, "fp16 + quantize", 90.0, "strong instruction editing",
-              "24 GB download; exceeds 14.56 GB at fp16 -> quantize/offload; non-commercial",
-              gpu="0"),
+              14.0, 24.0, "fp16 + cpu offload", 90.0, "strong instruction editing",
+              "24 GB download; >14.56 GB at fp16 -> cpu offload; non-commercial",
+              adapter="flux-edit", gpu="0", status="adapter_live"),
     # ---- LoRA (GPU 0) ----------------------------------------------------
     ModelSpec("lora-sdxl", "lora", "user-supplied / built-in SDXL LoRAs",
               "per-LoRA", "per-LoRA (must permit hosted use)", "per-LoRA",
               10.0, 0.2, "fp16", 2.0, "style/character injection",
               "load only .safetensors; never pickle; enforce SDXL family match",
-              gpu="0"),
+              adapter="sdxl-lora", gpu="0", status="adapter_live"),
     # ---- image-to-video (GPU 1) -----------------------------------------
     ModelSpec("ltx-video", "image2video", "Lightricks/LTX-Video",
               "main (VERIFY)", "LTX-Video license (VERIFY)", "conditional (VERIFY)",
               12.0, 10.0, "fp16", 90.0, "fast short clips",
               "short durations; distilled weights may have separate terms",
-              gpu="1"),
+              adapter="ltx-video", gpu="1", status="adapter_live"),
     # ---- text-to-video (GPU 1) ------------------------------------------
     ModelSpec("wan2.1-1.3b", "text2video", "Wan-AI/Wan2.1-T2V-1.3B",
               "main (VERIFY)", "Apache-2.0", "yes",
               10.0, 8.0, "fp16", 120.0, "1.3B small model, good motion",
               "low resolution vs 14B; longer clips need more VRAM",
-              gpu="1"),
+              adapter="wan2.1", gpu="1", status="adapter_live"),
     # ---- image-to-3D (GPU 1) --------------------------------------------
     ModelSpec("triposr", "image2_3d", "stabilityai/TripoSR",
               "main", "MIT", "yes",
@@ -98,7 +98,7 @@ REGISTRY: list[ModelSpec] = [
               "main (VERIFY)", "CreativeML OpenRAIL++-M", "conditional (use restrictions)",
               12.0, 7.0, "fp16", 20.0, "projection texturing for meshes",
               "UV projection quality varies; verify texture seam handling",
-              gpu="0"),
+              adapter="texture", gpu="0", status="adapter_live"),
 ]
 
 _BY_ID = {m.id: m for m in REGISTRY}

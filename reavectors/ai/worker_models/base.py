@@ -110,9 +110,24 @@ def build_default_manager(cache_dir: str = "./models") -> ModelManager:
         from .hunyuan3d import Hunyuan3DMiniAdapter
         return Hunyuan3DMiniAdapter(cache_dir=cache_dir)
 
+    def _gen(cls_name):
+        def build():
+            from . import generative
+            return getattr(generative, cls_name)(cache_dir=cache_dir)
+        return build
+
     return ModelManager({
         "triposr": lambda: TripoSRAdapter(cache_dir=cache_dir),          # ~6 GB
         "sf3d": _sf3d,                                                   # ~6.5 GB  (default)
         "hunyuan3d-mini": _hunyuan_mini,                                 # ~10 GB   fits T4
         "hunyuan3d": _hunyuan,                                           # ~24 GB   g5/g6 only
+        # text-to-image / edit / texture / LoRA (GPU 0)
+        "sdxl": _gen("SDXLAdapter"),
+        "z-image": _gen("ZImageAdapter"),
+        "flux-edit": _gen("FluxEditAdapter"),
+        "texture": _gen("TextureAdapter"),
+        "sdxl-lora": _gen("SdxlLoraAdapter"),
+        # video (GPU 1)
+        "wan2.1": _gen("WanText2VideoAdapter"),
+        "ltx-video": _gen("LtxImage2VideoAdapter"),
     })
