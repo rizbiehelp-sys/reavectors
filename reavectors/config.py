@@ -154,3 +154,8 @@ SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 STATS_CACHE_SECONDS = _int("REAVECTORS_STATS_CACHE_SECONDS", 30)
 # Activity interval that keeps a free Supabase project from pausing (7-day limit).
 SUPABASE_KEEPALIVE_SECONDS = _int("REAVECTORS_SUPABASE_KEEPALIVE_SECONDS", 3600)
+
+# --- Kaggle <-> Render artifact bridge (owner-only; no public GPU serving) ---
+AI_BRIDGE_KEY = os.environ.get("AI_BRIDGE_KEY", "").strip()
+AI_BRIDGE_DIR = os.environ.get("AI_BRIDGE_DIR", os.path.join("data", "ai_bridge"))
+AI_BRIDGE_MAX_MB = _int("AI_BRIDGE_MAX_MB", 200)

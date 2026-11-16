@@ -354,6 +354,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, svc.capacity()[1])
                 if parts == ["models"]:
                     return self._json(200, svc.models()[1])
+                if parts and parts[0] == "bridge":
+                    return self._bridge_get(parts, qs)
                 if parts == ["loras"]:
                     return self._json(200, svc.loras(user)[1])
                 if parts == ["jobs", "history"]:
@@ -378,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
                     st, obj = svc.get(user, parts[1], admin)
                     return self._json(st, obj)
             elif method == "POST":
+                if parts and parts[0] == "bridge":
+                    return self._bridge_post(parts)
                 if parts == ["product3d"]:
                     return self._product3d(svc, user, qs)
                 if parts == ["3d"]:
@@ -412,6 +416,102 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(404, "unknown AI endpoint")
         except Exception as exc:  # noqa: BLE001
             return self._error(500, f"{type(exc).__name__}")
+
+    # -- Kaggle <-> Render artifact bridge (owner-only) --------------------
+    def _bridge_key_ok(self) -> bool:
+        if not config.AI_BRIDGE_KEY:
+            return False
+        return hmac.compare_digest(self.headers.get("X-Bridge-Key", ""), config.AI_BRIDGE_KEY)
+
+    def _bridge_get(self, parts, qs):
+        from .ai.bridge import get_bridge
+        # artifacts are public (the studio displays them)
+        if len(parts) == 3 and parts[1] == "artifacts":
+            path = get_bridge().artifact_path(parts[2])
+            if not path:
+                return self._error(404, "artifact not found")
+            ext = os.path.splitext(path)[1].lower()
+            ctype = {".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
+                     ".mp4": "video/mp4", ".webm": "video/webm", ".png": "image/png",
+                     ".jpg": "image/jpeg", ".zip": "application/zip"}.get(ext, "application/octet-stream")
+            try:
+                with open(path, "rb") as f:
+                    body = f.read()
+            except OSError:
+                return self._error(404, "artifact not found")
+            return self._send(200, body, ctype)
+        if not self._bridge_key_ok():
+            return self._error(403, "bridge disabled or bad key")
+        if parts == ["bridge", "jobs"]:
+            status = qs.get("status", [None])[0]
+            return self._json(200, {"jobs": get_bridge().list(status)})
+        if len(parts) == 3 and parts[1] == "jobs":
+            try:
+                return self._json(200, get_bridge().get(parts[2]))
+            except Exception:  # noqa: BLE001
+                return self._error(404, "job not found")
+        return self._error(404, "not found")
+
+    def _bridge_post(self, parts):
+        from .ai.bridge import get_bridge
+        if not self._bridge_key_ok():
+            return self._error(403, "bridge disabled or bad key")
+        bridge = get_bridge()
+        if parts == ["bridge", "jobs"]:
+            data = self._read_bounded(1024 * 1024)
+            if data is None:
+                return self._error(413, "body too large")
+            try:
+                body = json.loads(data or b"{}")
+            except Exception:  # noqa: BLE001
+                return self._error(400, "invalid JSON")
+            job = bridge.submit(str(body.get("task", "")), str(body.get("model", "")),
+                                body.get("input_url"), body.get("params") or {})
+            return self._json(200, job)
+        if len(parts) == 4 and parts[1] == "jobs":
+            jid, action = parts[2], parts[3]
+            try:
+                if action == "claim":
+                    job = bridge.claim(jid)
+                    return self._json(200 if job else 409, job or {"error": "job not pending"})
+                if action == "fail":
+                    data = self._read_bounded(64 * 1024) or b"{}"
+                    try:
+                        body = json.loads(data)
+                    except Exception:  # noqa: BLE001
+                        body = {}
+                    return self._json(200, bridge.fail(jid, str(body.get("error", "failed"))))
+                if action == "result":
+                    ctype = self.headers.get("Content-Type", "")
+                    data = self._read_bounded(config.AI_BRIDGE_MAX_MB * 1024 * 1024 * 2)
+                    if data is None:
+                        return self._error(413, "result too large")
+                    if "multipart/form-data" not in ctype:
+                        return self._error(415, "expected multipart/form-data")
+                    boundary = None
+                    for part in ctype.split(";"):
+                        part = part.strip()
+                        if part.startswith("boundary="):
+                            boundary = part[len("boundary="):].strip().strip('"')
+                    if not boundary:
+                        return self._error(400, "missing multipart boundary")
+                    fields = _parse_multipart(data, boundary)
+                    blob = fields.get("file")
+                    if not blob:
+                        return self._error(400, "missing 'file'")
+                    filename = (fields.get("filename") or b"artifact.bin").decode("utf-8", "replace")
+                    manifest = None
+                    if fields.get("manifest"):
+                        try:
+                            manifest = json.loads(fields["manifest"].decode("utf-8"))
+                        except Exception:  # noqa: BLE001
+                            manifest = None
+                    res = bridge.complete(jid, filename, blob, manifest)
+                    res["url"] = "/api/ai/bridge/artifacts/" + res["artifact"]
+                    return self._json(200, res)
+            except FileNotFoundError:
+                return self._error(404, "job not found")
+        return self._error(404, "not found")
 
     def _product3d(self, svc, user, qs=None):
         """
