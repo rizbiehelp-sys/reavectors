@@ -102,7 +102,12 @@ def status(ref: str = None) -> dict:
         raw = api.kernels_status(ref or kernel_ref())
     except Exception as exc:  # noqa: BLE001
         raise KaggleUnavailable(f"status failed: {exc}") from exc
-    # Kaggle returns datetimes/other objects -> make it plain JSON
+    # Kaggle may return a JSON string (and datetimes) -> normalize to a plain dict
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            return {"raw": raw}
     try:
         return json.loads(json.dumps(raw, default=str))
     except Exception:  # noqa: BLE001
