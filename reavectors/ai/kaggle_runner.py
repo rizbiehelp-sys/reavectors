@@ -99,6 +99,11 @@ def trigger(bridge_url: str, bridge_key: str, notebook_path: str = None) -> dict
 def status(ref: str = None) -> dict:
     api = _api()
     try:
-        return api.kernels_status(ref or kernel_ref())
+        raw = api.kernels_status(ref or kernel_ref())
     except Exception as exc:  # noqa: BLE001
         raise KaggleUnavailable(f"status failed: {exc}") from exc
+    # Kaggle returns datetimes/other objects -> make it plain JSON
+    try:
+        return json.loads(json.dumps(raw, default=str))
+    except Exception:  # noqa: BLE001
+        return {"raw": str(raw)}
