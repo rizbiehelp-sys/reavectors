@@ -159,3 +159,8 @@ SUPABASE_KEEPALIVE_SECONDS = _int("REAVECTORS_SUPABASE_KEEPALIVE_SECONDS", 3600)
 AI_BRIDGE_KEY = os.environ.get("AI_BRIDGE_KEY", "").strip()
 AI_BRIDGE_DIR = os.environ.get("AI_BRIDGE_DIR", os.path.join("data", "ai_bridge"))
 AI_BRIDGE_MAX_MB = _int("AI_BRIDGE_MAX_MB", 200)
+
+# --- Kaggle Kernels API (owner-only on-demand trigger) ---
+KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME", "").strip()
+KAGGLE_KEY = os.environ.get("KAGGLE_KEY", "").strip()
+KAGGLE_KERNEL_SLUG = os.environ.get("KAGGLE_KERNEL_SLUG", "reavector-worker").strip()

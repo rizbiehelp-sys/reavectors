@@ -5,3 +5,4 @@ vtracer>=0.6.15
 reportlab>=4.0
 pypdf>=4.0        # tests only (validates generated PDF/AI)
 tripo3d>=1.0.0
+kaggle>=1.6

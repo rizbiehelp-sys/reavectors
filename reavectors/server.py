@@ -442,6 +442,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, body, ctype)
         if not self._bridge_key_ok():
             return self._error(403, "bridge disabled or bad key")
+        if parts == ["bridge", "kernel"]:
+            from .ai import kaggle_runner
+            try:
+                return self._json(200, kaggle_runner.status(qs.get("ref", [""])[0] or None))
+            except kaggle_runner.KaggleUnavailable as exc:
+                return self._error(502, str(exc))
         if parts == ["bridge", "jobs"]:
             status = qs.get("status", [None])[0]
             return self._json(200, {"jobs": get_bridge().list(status)})
@@ -457,6 +463,33 @@ class Handler(BaseHTTPRequestHandler):
         if not self._bridge_key_ok():
             return self._error(403, "bridge disabled or bad key")
         bridge = get_bridge()
+        if parts == ["bridge", "trigger"]:
+            from .ai import kaggle_runner
+            if not kaggle_runner.configured():
+                return self._error(503, "Kaggle API not configured")
+            data = self._read_bounded(256 * 1024)
+            try:
+                body = json.loads(data or b"{}")
+            except Exception:  # noqa: BLE001
+                return self._error(400, "invalid JSON")
+            job_id = body.get("job_id")
+            if job_id:
+                try:
+                    job = bridge.get(job_id)
+                except Exception:  # noqa: BLE001
+                    return self._error(404, "job not found")
+            else:
+                job = bridge.submit(str(body.get("task", "image2_3d")),
+                                    str(body.get("model", "triposr")),
+                                    body.get("input_url"), body.get("params") or {})
+            scheme = self.headers.get("X-Forwarded-Proto", "https")
+            host = self.headers.get("Host", "")
+            base = f"{scheme}://{host}" if host else "https://reavectors.onrender.com"
+            try:
+                res = kaggle_runner.trigger(base, config.AI_BRIDGE_KEY)
+            except kaggle_runner.KaggleUnavailable as exc:
+                return self._error(502, str(exc))
+            return self._json(200, {"job": job, **res})
         if parts == ["bridge", "jobs"]:
             data = self._read_bounded(1024 * 1024)
             if data is None:

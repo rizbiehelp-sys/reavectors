@@ -73,6 +73,22 @@ the only public part, so the website can display results.
 Per GPU (`--gpu 0|1`), writes `bench/results/bench-gpu<N>-<utc>.json|.md` with
 seconds, **peak VRAM**, bytes and failures. `--list` / `--dry-run` need no GPU.
 
+## On-demand trigger (Kaggle API)
+
+Owner-only `POST /api/ai/bridge/trigger` (needs `X-Bridge-Key`) turns a queued job
+into a **running Kaggle GPU kernel**:
+
+1. body `{task, model, input_url, params}` (or `{job_id}`) — queues/fetches the job.
+2. `reavectors/ai/kaggle_runner.py` builds a **private** kernel from
+   `notebooks/kaggle_main.ipynb` (bridge key injected, `enable_gpu: true`) and calls
+   Kaggle's `kernels push`.
+3. the kernel runs on a T4, pulls the job, runs it, uploads the GLB to the bridge.
+4. `GET /api/ai/bridge/kernel?ref=owner/slug` returns the kernel status.
+
+Requires `KAGGLE_USERNAME` + `KAGGLE_KEY` (from `kaggle.json`) in Render env — never
+committed. Not instant: Kaggle queues the kernel (minutes) and enforces the weekly
+GPU quota. Still personal/owner use only.
+
 ## Safety
 
 - No AWS GPU, no paid GPU API, no automatic paid fallback.
