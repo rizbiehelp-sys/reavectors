@@ -92,6 +92,29 @@ class ZImageAdapter(Text2ImageAdapter):
     model_id = "Tongyi-MAI/Z-Image-Turbo"
     trust_remote_code = True
 
+    def load(self) -> None:
+        import diffusers
+        cls = getattr(diffusers, "ZImagePipeline", None)
+        if cls is None:
+            from diffusers import AutoPipelineForText2Image as cls
+        self.pipe = cls.from_pretrained(self.model_id, torch_dtype=self._dtype())
+        if torch.cuda.is_available():
+            self.pipe.to("cuda")
+
+    def run(self, input_path: str, params: dict, out_dir: str) -> str:
+        os.makedirs(out_dir, exist_ok=True)
+        if self.pipe is None:
+            self.load()
+        image = self.pipe(
+            prompt=_prompt_from(input_path, params),
+            num_inference_steps=int(params.get("steps", 8)),
+            guidance_scale=float(params.get("guidance", 0.0)),
+            height=int(params.get("height", 1024)), width=int(params.get("width", 1024)),
+        ).images[0]
+        path = os.path.join(out_dir, "output.png")
+        image.save(path)
+        return path
+
 
 # ---------------------------------------------------------------------------
 # image editing (FLUX-Kontext) — needs ~16 GB at fp16
