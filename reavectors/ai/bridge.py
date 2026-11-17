@@ -228,9 +228,11 @@ class SupabaseBridge:
         out = []
         with self._lock:
             for name in self._names("job_"):
-                if not name.endswith(".json"):
+                # Supabase returns names relative to the prefix; restore the full key
+                full = name if name.startswith("job_") else "job_" + name
+                if not full.endswith(".json"):
                     continue
-                body = self._get(name)
+                body = self._get(full)
                 if not body:
                     continue
                 try:
