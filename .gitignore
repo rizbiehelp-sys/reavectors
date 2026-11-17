@@ -20,3 +20,8 @@ bench/results/
 !.env.example
 .secrets/
 *.local.env
+
+# Kaggle output downloads (large; not source)
+bench/kaggle-out/
+bench/triposr-out/
+
