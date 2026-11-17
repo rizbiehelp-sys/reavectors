@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="reavectors-key" content="__REAVECTORS_API_KEY__" />
+  <meta name="ai-bridge-key" content="__AI_BRIDGE_KEY__" />
+  <title>ReaVector · AI 3D</title>
+  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/ui.css?v=2" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><strong>reavectors</strong><span class="tag">AI 3D</span></div>
+    <nav class="nav">
+      <a href="/">2D Vectorizer</a>
+      <a href="/image.html">Image</a>
+      <a href="/video.html">Video</a>
+      <a href="/model3d.html" class="active">AI 3D</a>
+      <a href="/product3d.html">Product 3D</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">&#9673;</div>
+          <p class="drop-title">Product photo</p>
+          <p class="drop-sub">one clean, straight-on photo works best</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>Model <select id="model"></select></label>
+        <label>Steps <output id="stepsOut">30</output><input id="steps" type="range" min="10" max="60" step="5" value="30" /></label>
+      </div>
+
+      <div class="actions"><button id="go" class="primary">Generate 3D</button></div>
+      <p id="status" class="status">Add a photo and press Generate — runs on Kaggle and loads the GLB here.</p>
+    </section>
+
+    <section class="stage">
+      <div class="stage-head"><span>3D result</span><span id="meta" class="muted"></span></div>
+      <div class="viewport" id="viewport"><div class="empty" id="empty">Your generated model appears here.</div></div>
+      <p id="dl" class="status" style="display:none"></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as THREE from "/vendor/three/three.module.js";
+    import { OrbitControls } from "/vendor/three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "/vendor/three/addons/loaders/GLTFLoader.js";
+    import { generate, registry, configured } from "/gen.js";
+
+    const $ = (id) => document.getElementById(id);
+    const viewport = $("viewport"), empty = $("empty"), statusEl = $("status"), meta = $("meta"), dl = $("dl");
+    const fileEl = $("file"), drop = $("drop"), modelSel = $("model"), steps = $("steps");
+    let file = null, MODELS = [];
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+    viewport.appendChild(renderer.domElement);
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0f14);
+    const camera = new THREE.PerspectiveCamera(42, viewport.clientWidth / viewport.clientHeight, 0.01, 100);
+    camera.position.set(0, 0.2, 3);
+    const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(2, 3, 4); scene.add(key);
+    const group = new THREE.Group(); scene.add(group);
+    addEventListener("resize", () => { camera.aspect = viewport.clientWidth / viewport.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(viewport.clientWidth, viewport.clientHeight); });
+    (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+    steps.addEventListener("input", () => $("stepsOut").textContent = steps.value);
+    drop.addEventListener("click", () => fileEl.click());
+    fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) statusEl.textContent = "Photo: " + file.name; });
+
+    (async () => {
+      MODELS = (await registry()).filter((m) => m.task === "image2_3d");
+      modelSel.innerHTML = MODELS.map((m) => `<option value="${m.id}">${m.id} · ${m.vram_gb}GB</option>`).join("") || "<option>none</option>";
+      if (!configured()) statusEl.textContent = "AI is not configured on the server yet.";
+    })();
+
+    function showGlb(url, name) {
+      new GLTFLoader().load(url, (g) => {
+        group.clear(); group.add(g.scene);
+        const box = new THREE.Box3().setFromObject(g.scene);
+        const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+        g.scene.position.sub(c);
+        const m = Math.max(size.x, size.y, size.z) || 1;
+        camera.position.set(0, m * 0.15, m * 2.2); controls.target.set(0, 0, 0); controls.update();
+        empty.style.display = "none";
+        dl.style.display = "block";
+        dl.innerHTML = `<a href="${url}" download="${name}">Download .glb</a>`;
+      }, undefined, (e) => { statusEl.textContent = "GLB load failed: " + e; });
+    }
+
+    $("go").addEventListener("click", async () => {
+      if (!file) { statusEl.textContent = "Add a photo first."; return; }
+      const btn = $("go"); btn.disabled = true;
+      try {
+        const job = await generate({ task: "image2_3d", model: modelSel.value, file, prompt: "", steps: Number(steps.value), onStage: (s) => statusEl.textContent = s });
+        meta.textContent = "done";
+        const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
+        showGlb(url, job.artifact);
+        statusEl.textContent = "Done.";
+      } catch (e) { statusEl.textContent = "Error: " + (e.message || e); }
+      finally { btn.disabled = false; }
+    });
+  </script>
+</body>
+</html>

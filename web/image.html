@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="reavectors-key" content="__REAVECTORS_API_KEY__" />
+  <meta name="ai-bridge-key" content="__AI_BRIDGE_KEY__" />
+  <title>ReaVector · Image</title>
+  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/ui.css?v=2" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><strong>reavectors</strong><span class="tag">Image</span></div>
+    <nav class="nav">
+      <a href="/">2D Vectorizer</a>
+      <a href="/image.html" class="active">Image</a>
+      <a href="/video.html">Video</a>
+      <a href="/model3d.html">AI 3D</a>
+      <a href="/product3d.html">Product 3D</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <div class="controls">
+        <label>Mode
+          <select id="mode">
+            <option value="text2image">Text → Image</option>
+            <option value="image_edit">Edit an image</option>
+            <option value="texture">Texture</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">&#9633;</div>
+          <p class="drop-title">Add a photo (optional)</p>
+          <p class="drop-sub">needed for Edit / Texture · JPG · PNG · WebP</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>Prompt <input id="prompt" type="text" placeholder="a glass juice bottle on a white background" /></label>
+        <label>Model <select id="model"></select></label>
+        <label>Steps <output id="stepsOut">30</output><input id="steps" type="range" min="10" max="60" step="5" value="30" /></label>
+      </div>
+
+      <div class="actions"><button id="go" class="primary">Generate</button></div>
+      <p id="status" class="status">Describe an image and press Generate.</p>
+    </section>
+
+    <section class="stage">
+      <div class="stage-head"><span>Result</span><span id="meta" class="muted"></span></div>
+      <div class="preview" id="preview">Your image appears here.</div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { generate, registry, configured, headers } from "/gen.js";
+    const $ = (id) => document.getElementById(id);
+    const fileEl = $("file"), drop = $("drop"), statusEl = $("status"), preview = $("preview"), meta = $("meta");
+    const mode = $("mode"), modelSel = $("model"), prompt = $("prompt"), steps = $("steps");
+    let MODELS = [], file = null;
+    steps.addEventListener("input", () => $("stepsOut").textContent = steps.value);
+    drop.addEventListener("click", () => fileEl.click());
+    fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) statusEl.textContent = "Photo: " + file.name; });
+    mode.addEventListener("change", fill);
+    function fill() {
+      const list = MODELS.filter((m) => m.task === mode.value);
+      modelSel.innerHTML = list.map((m) => `<option value="${m.id}">${m.id}</option>`).join("") || "<option>none</option>";
+    }
+    (async () => {
+      MODELS = await registry();
+      const order = ["text2image", "image_edit", "texture"];
+      mode.innerHTML = order.filter((t) => MODELS.some((m) => m.task === t))
+        .map((t) => `<option value="${t}">${({text2image:"Text → Image",image_edit:"Edit an image",texture:"Texture"})[t]}</option>`).join("");
+      fill();
+      if (!configured()) statusEl.textContent = "AI is not configured on the server yet.";
+    })();
+    $("go").addEventListener("click", async () => {
+      const btn = $("go"); btn.disabled = true;
+      try {
+        const job = await generate({ task: mode.value, model: modelSel.value, file, prompt: prompt.value.trim(), steps: Number(steps.value), onStage: (s) => statusEl.textContent = s });
+        meta.textContent = "done";
+        const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
+        preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
+        statusEl.textContent = "Done.";
+      } catch (e) { statusEl.textContent = "Error: " + (e.message || e); }
+      finally { btn.disabled = false; }
+    });
+  </script>
+</body>
+</html>

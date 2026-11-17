@@ -212,7 +212,7 @@ class Handler(BaseHTTPRequestHandler):
                     body = f.read()
                 if ctype.startswith("text/html"):
                     # keep the bundled UI working when an API key is configured
-                    body = body.decode("utf-8").replace("__REAVECTORS_API_KEY__", config.API_KEY).encode("utf-8")
+                    body = body.decode("utf-8").replace("__REAVECTORS_API_KEY__", config.API_KEY).replace("__AI_BRIDGE_KEY__", config.AI_BRIDGE_KEY).encode("utf-8")
                 return self._send(200, body, ctype)
             except OSError:
                 pass
@@ -225,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self._error(404, "not found")
         # Inject the API key (if configured) so the bundled UI keeps working.
-        html = html.replace("__REAVECTORS_API_KEY__", config.API_KEY)
+        html = html.replace("__REAVECTORS_API_KEY__", config.API_KEY).replace("__AI_BRIDGE_KEY__", config.AI_BRIDGE_KEY)
         return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
 
     def do_OPTIONS(self):
