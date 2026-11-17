@@ -30,6 +30,20 @@ def _prompt_from(input_path: str, params: dict) -> str:
     return "a product photo, studio lighting"
 
 
+def _maybe_lora(pipe, params: dict) -> None:
+    """Load a compatible .safetensors LoRA into a diffusers pipeline."""
+    lora = params.get("lora_path")
+    if not lora:
+        return
+    if not str(lora).lower().endswith(".safetensors"):
+        raise ValueError("only .safetensors LoRAs are allowed (no pickle)")
+    pipe.load_lora_weights(lora)
+    try:
+        pipe.fuse_lora()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 class _DiffusersBase:
     name = "base"
     vram_gb = 10.0
@@ -165,6 +179,7 @@ class WanText2VideoAdapter(_DiffusersBase):
         os.makedirs(out_dir, exist_ok=True)
         if self.pipe is None:
             self.load()
+        _maybe_lora(self.pipe, params)
         frames = self.pipe(
             prompt=_prompt_from(input_path, params),
             num_inference_steps=int(params.get("steps", 30)),
@@ -200,6 +215,7 @@ class LtxImage2VideoAdapter(_DiffusersBase):
         if self.pipe is None:
             self.load()
         image = Image.open(input_path).convert("RGB")
+        _maybe_lora(self.pipe, params)
         out = self.pipe(image=image, prompt=_prompt_from(None, params),
                         num_inference_steps=int(params.get("steps", 30)),
                         num_frames=int(params.get("frames", 97)),
