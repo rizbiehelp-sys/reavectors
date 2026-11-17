@@ -5,6 +5,8 @@ import { generate, registry, configured } from "/gen.js";
 
 const $ = (id) => document.getElementById(id);
 const viewport = $("viewport"), empty = $("empty"), statusEl = $("status"), meta = $("meta"), dl = $("dl");
+const prog = $("prog"), countEl = $("count"), fillEl = $("fill"), stageTxt = $("stageTxt");
+function tick({ remaining, pct }) { prog.hidden = false; countEl.textContent = Math.ceil(remaining) + "s"; fillEl.style.width = pct + "%"; }
 const fileEl = $("file"), drop = $("drop"), modelSel = $("model"), steps = $("steps");
 let file = null, MODELS = [];
 
@@ -53,13 +55,13 @@ $("go").addEventListener("click", async () => {
   if (!file) { statusEl.textContent = "Add a photo first."; return; }
   const btn = $("go"); btn.disabled = true;
   try {
-    const job = await generate({ task: "image2_3d", model: modelSel.value, file, prompt: "", steps: Number(steps.value), onStage: (s) => { statusEl.textContent = s; } });
+    const job = await generate({ task: "image2_3d", model: modelSel.value, file, prompt: "", steps: Number(steps.value), onStage: (s) => { statusEl.textContent = s; stageTxt.textContent = s; }, onTick: tick });
     meta.textContent = "done";
     const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
 showGlb(url, job.artifact);
         const a = document.createElement("a"); a.href = url; a.download = job.artifact; a.click();
-        statusEl.textContent = "Done.";
+        countEl.textContent = "0s"; fillEl.style.width = "100%"; statusEl.textContent = "Done."; setTimeout(() => { prog.hidden = true; }, 900);
   } catch (e) {
-    statusEl.textContent = "Error: " + (e.message || e);
+    statusEl.textContent = "Error: " + (e.message || e); prog.hidden = true;
   } finally { btn.disabled = false; }
 });

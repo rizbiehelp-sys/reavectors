@@ -50,6 +50,10 @@
 
       <div class="actions"><button id="go" class="primary">Generate</button></div>
       <p id="status" class="status">Describe an image and press Generate.</p>
+      <div id="prog" class="genprog" hidden>
+        <div class="row"><div class="spinner" style="margin:0;width:20px;height:20px"></div><span id="count" class="count">0s</span><span id="stageTxt" class="muted"></span></div>
+        <div class="bar"><div id="fill"></div></div>
+      </div>
     </section>
 
     <section class="stage">
