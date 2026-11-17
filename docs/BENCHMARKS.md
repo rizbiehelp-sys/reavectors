@@ -40,6 +40,7 @@ No result is fabricated: image is measured; 3D awaits a working runtime.
 | 2 | Texture (SDXL img2img) | texture | **works** | **238.1 s** | verified (output in Downloads) |
 | 3 | Z-Image-Turbo | text2image | **fails** | 444.5 s wasted | dies at 92% of a **12 GB** download -> Kaggle disk too small |
 | 4 | FLUX-Kontext | image_edit | not run | - | 24 GB download -> will not fit Kaggle disk |
+| 4b | Wan 2.1 1.3B | text2video | **fails** | 368.3 s wasted | dies at ~98% of an 8 GB download (disk/network limit) |
 | 5 | LTX-Video | image2video | not run | - | 10 GB, may fit but tight |
 | 6 | Wan 2.1 1.3B | text2video | not run | - | 8 GB |
 | 7 | TripoSR | image2_3d | blocked | - | torchmcubes will not build on Kaggle torch 2.11 |
