@@ -31,3 +31,22 @@ will report a real number **once a compatible runtime exists**.
 3. **Custom Docker image** (TripoSR/SF3D prebuilt) — most reliable, no per-run builds.
 
 No result is fabricated: image is measured; 3D awaits a working runtime.
+
+## Web/bridge end-to-end (owner Kaggle runs)
+
+| # | Model | Task | Result | Wall time | Now |
+|---|---|---|---|---|---|
+| 1 | SDXL | text2image | **works** | **242.5 s** | verified (output in Downloads) |
+| 2 | Texture (SDXL img2img) | texture | **works** | **238.1 s** | verified (output in Downloads) |
+| 3 | Z-Image-Turbo | text2image | **fails** | 444.5 s wasted | dies at 92% of a **12 GB** download -> Kaggle disk too small |
+| 4 | FLUX-Kontext | image_edit | not run | - | 24 GB download -> will not fit Kaggle disk |
+| 5 | LTX-Video | image2video | not run | - | 10 GB, may fit but tight |
+| 6 | Wan 2.1 1.3B | text2video | not run | - | 8 GB |
+| 7 | TripoSR | image2_3d | blocked | - | torchmcubes will not build on Kaggle torch 2.11 |
+| 8 | SF3D | image2_3d | blocked | - | numpy pin + local C++ builds |
+| 9 | Hunyuan3D | image2_3d | blocked | - | 24 GB VRAM > T4 |
+
+Runs used: SDXL 2 kernels (1 dep-fix + 1 success); Texture 1; Z-Image 2 (1 bad-input + 1 disk-fail).
+
+Constraint: Kaggle's container disk (~20 GB) cannot hold the 12-24 GB image models.
+Fix: attach weights as a **Kaggle Dataset** (mounted, not downloaded per run) or use quantized variants.
