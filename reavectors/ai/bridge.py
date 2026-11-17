@@ -227,9 +227,12 @@ class SupabaseBridge:
     def list(self, status=None, limit=50):
         out = []
         with self._lock:
-            for name in self._names("job_"):
-                # Supabase returns names relative to the prefix; restore the full key
-                full = name if name.startswith("job_") else "job_" + name
+            # Supabase `prefix` is a folder; our objects live at the bucket root,
+            # so list the root and filter by the job_ name prefix.
+            for name in self._names(""):
+                if not name.startswith("job_"):
+                    continue
+                full = name
                 if not full.endswith(".json"):
                     continue
                 body = self._get(full)
