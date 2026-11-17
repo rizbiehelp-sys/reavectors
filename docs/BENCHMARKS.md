@@ -51,3 +51,17 @@ Runs used: SDXL 2 kernels (1 dep-fix + 1 success); Texture 1; Z-Image 2 (1 bad-i
 
 Constraint: Kaggle's container disk (~20 GB) cannot hold the 12-24 GB image models.
 Fix: attach weights as a **Kaggle Dataset** (mounted, not downloaded per run) or use quantized variants.
+
+
+## Hard limit found: repo sizes vs Kaggle disk
+
+| Repo | Total size | Fits Kaggle (~8-20 GB)? |
+|---|---|---|
+| stabilityai/stable-diffusion-xl-base-1.0 | ~7 GB | yes (works) |
+| Tongyi-MAI/Z-Image-Turbo | 32.9 GB | **no** |
+| Wan-AI/Wan2.1-T2V-1.3B-Diffusers | 28.9 GB | **no** (T5 encoder ~23 GB) |
+| Lightricks/LTX-Video | large (13B variants) | no |
+| black-forest-labs/FLUX.1-Kontext-dev | ~24 GB | no |
+
+Z-Image / Wan / LTX / FLUX cannot run on Kaggle free tier: the download (or the
+dataset build) dies with "No space left on device". Only SDXL-class models fit.
