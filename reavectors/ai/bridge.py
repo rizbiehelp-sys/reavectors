@@ -111,6 +111,14 @@ class ArtifactBridge:
             j.update({"status": "failed", "error": error}); self._write(j)
             return j
 
+    def put_blob(self, name, data, ctype="application/octet-stream"):
+        if os.path.basename(name) != name:
+            raise ValueError("bad name")
+        with self._lock:
+            with open(os.path.join(self.art_dir, name), "wb") as f:
+                f.write(data)
+        return name
+
     def artifact_bytes(self, name):
         if os.path.basename(name) != name:
             return None
@@ -251,6 +259,13 @@ class SupabaseBridge:
             j = self._read_job(job_id)
             j.update({"status": "failed", "error": error}); self._write_job(j)
             return j
+
+    def put_blob(self, name, data, ctype="application/octet-stream"):
+        if os.path.basename(name) != name:
+            raise ValueError("bad name")
+        with self._lock:
+            self._put(name, data, ctype)
+        return name
 
     def artifact_bytes(self, name):
         if os.path.basename(name) != name:

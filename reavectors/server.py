@@ -354,6 +354,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, svc.capacity()[1])
                 if parts == ["models"]:
                     return self._json(200, svc.models()[1])
+                if parts == ["registry"]:
+                    from .ai import registry as ai_registry
+                    return self._json(200, ai_registry.manifest())
                 if parts and parts[0] == "bridge":
                     return self._bridge_get(parts, qs)
                 if parts == ["loras"]:
@@ -462,6 +465,32 @@ class Handler(BaseHTTPRequestHandler):
         if not self._bridge_key_ok():
             return self._error(403, "bridge disabled or bad key")
         bridge = get_bridge()
+        if parts == ["bridge", "inputs"]:
+            import uuid as _uuid
+            ctype = self.headers.get("Content-Type", "")
+            data = self._read_bounded(config.MAX_UPLOAD_BYTES * 2)
+            if data is None:
+                return self._error(413, "upload too large")
+            if "multipart/form-data" not in ctype:
+                return self._error(415, "expected multipart/form-data")
+            boundary = None
+            for part in ctype.split(";"):
+                part = part.strip()
+                if part.startswith("boundary="):
+                    boundary = part[len("boundary="):].strip().strip('"')
+            if not boundary:
+                return self._error(400, "missing multipart boundary")
+            fields = _parse_multipart(data, boundary)
+            blob = fields.get("file")
+            if not blob:
+                return self._error(400, "missing 'file'")
+            filename = (fields.get("filename") or b"input.bin").decode("utf-8", "replace")
+            ext = os.path.splitext(filename)[1].lower() or ".bin"
+            name = "in_" + _uuid.uuid4().hex + ext
+            ct = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                  ".webp": "image/webp", ".mp4": "video/mp4"}.get(ext, "application/octet-stream")
+            bridge.put_blob(name, blob, ct)
+            return self._json(200, {"url": "/api/ai/bridge/artifacts/" + name, "name": name})
         if parts == ["bridge", "trigger"]:
             from .ai import kaggle_runner
             if not kaggle_runner.configured():
