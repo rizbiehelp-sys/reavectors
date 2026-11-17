@@ -10,16 +10,18 @@ const statusEl = $("status"), outEl = $("out"), preview = $("preview"), metaEl =
 const backendEl = $("backend"), emptyEl = $("empty"), viewport = $("viewport");
 const API_KEY = (document.querySelector('meta[name="reavectors-key"]')?.content || "").trim();
 
-let REGISTRY = [], currentJob = null, fileUrl = "";
+const KEY_HINT = "Render → Environment → AI_BRIDGE_KEY (copy the exact value).";
+
+let REGISTRY = [], currentJob = null;
 let renderer, scene, camera, controls, group;
 
-// ---- three.js viewer (shared viewport) --------------------------------
+// ---- three.js viewer --------------------------------------------------
 function initThree() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(viewport.clientWidth, viewport.clientHeight);
   viewport.appendChild(renderer.domElement);
-  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d1117);
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0f14);
   camera = new THREE.PerspectiveCamera(42, viewport.clientWidth / viewport.clientHeight, 0.01, 100);
   camera.position.set(0, 0.2, 3);
   controls = new OrbitControls(camera, renderer.domElement);
@@ -31,7 +33,7 @@ function initThree() {
     camera.aspect = viewport.clientWidth / viewport.clientHeight; camera.updateProjectionMatrix();
     renderer.setSize(viewport.clientWidth, viewport.clientHeight);
   });
-  (function loop(){ requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+  (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
 }
 
 function showGlb(url) {
@@ -48,7 +50,13 @@ function showGlb(url) {
 }
 
 // ---- helpers ----------------------------------------------------------
-const headers = () => { const h = {}; const k = keyEl.value.trim(); if (k) h["X-Bridge-Key"] = k; if (API_KEY) h["X-API-Key"] = API_KEY; return h; };
+function headers() {
+  const h = {};
+  const k = keyEl.value.trim();
+  if (k) h["X-Bridge-Key"] = k;
+  if (API_KEY) h["X-API-Key"] = API_KEY;
+  return h;
+}
 const abs = (u) => new URL(u, location.origin).href;
 
 async function loadRegistry() {
@@ -56,23 +64,34 @@ async function loadRegistry() {
     const r = await fetch("/api/ai/registry"); const j = await r.json();
     REGISTRY = j.models || [];
     taskEl.innerHTML = [...new Set(REGISTRY.map((m) => m.task))].map((t) => `<option>${t}</option>`).join("");
-    taskEl.value = REGISTRY.some((m) => m.task === "image2_3d") ? "image2_3d" : taskEl.value;
+    if (REGISTRY.some((m) => m.task === "image2_3d")) taskEl.value = "image2_3d";
     fillModels();
   } catch (e) { outEl.textContent = "registry load failed: " + e; }
 }
 function fillModels() {
   const t = taskEl.value;
-  modelEl.innerHTML = REGISTRY.filter((m) => m.task === t)
-    .map((m) => `<option value="${m.id}">${m.id} · ${m.status} · ${m.vram_gb}GB</option>`).join("");
+  const list = REGISTRY.filter((m) => m.task === t);
+  modelEl.innerHTML = list.map((m) => `<option value="${m.id}">${m.id} · ${m.status} · ${m.vram_gb}GB</option>`).join("");
 }
 taskEl.addEventListener("change", fillModels);
 stepsEl.addEventListener("input", () => { stepsOut.textContent = stepsEl.value; });
 
 async function checkBackend() {
+  if (!keyEl.value.trim()) {
+    backendEl.textContent = "bridge: key needed";
+    statusEl.textContent = "Paste your bridge key and Save. " + KEY_HINT;
+    return;
+  }
   try {
     const r = await fetch("/api/ai/bridge/backend", { headers: headers() });
-    const j = await r.json();
-    backendEl.textContent = "bridge: " + (j.backend || r.status);
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      backendEl.textContent = "bridge: " + (j.backend || "ok");
+      statusEl.textContent = `Bridge key valid (${j.backend || "ok"}).`;
+    } else {
+      backendEl.textContent = "bridge: key invalid";
+      statusEl.textContent = "Bridge key invalid — " + KEY_HINT;
+    }
   } catch { backendEl.textContent = "bridge: offline"; }
 }
 
@@ -82,33 +101,43 @@ async function uploadInput() {
   fd.append("file", fileEl.files[0]);
   fd.append("filename", fileEl.files[0].name);
   const r = await fetch("/api/ai/bridge/inputs", { method: "POST", headers: headers(), body: fd });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || `upload ${r.status}`);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 403 ? "Bridge key invalid — " + KEY_HINT : (j.error || `upload ${r.status}`));
   return abs(j.url);
 }
 
 async function queueJob() {
+  if (!keyEl.value.trim()) { statusEl.textContent = "Paste your bridge key first. " + KEY_HINT; return; }
   statusEl.textContent = "Uploading input…";
   try {
     const input_url = await uploadInput();
-    const body = { task: taskEl.value, model: modelEl.value, input_url: input_url || null,
-                   params: { prompt: promptEl.value.trim(), steps: Number(stepsEl.value) } };
-    const r = await fetch("/api/ai/bridge/jobs", { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || `queue ${r.status}`);
-    currentJob = j; statusEl.textContent = `Queued ${j.id} (${j.model}).`;
+    const body = {
+      task: taskEl.value, model: modelEl.value, input_url: input_url || null,
+      params: { prompt: promptEl.value.trim(), steps: Number(stepsEl.value) },
+    };
+    const r = await fetch("/api/ai/bridge/jobs", {
+      method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 403 ? "Bridge key invalid — " + KEY_HINT : (j.error || `queue ${r.status}`));
+    currentJob = j;
+    statusEl.textContent = `Queued ${j.id} (${j.model}). Now press “Run on Kaggle”.`;
     renderJob(j);
   } catch (e) { statusEl.textContent = "Queue error: " + (e.message || e); }
 }
 
 async function trigger() {
-  if (!currentJob) return statusEl.textContent = "Queue a job first.";
+  if (!keyEl.value.trim()) { statusEl.textContent = "Paste your bridge key first. " + KEY_HINT; return; }
+  if (!currentJob) { statusEl.textContent = "Queue a job first."; return; }
   statusEl.textContent = "Triggering Kaggle kernel…";
   try {
-    const r = await fetch("/api/ai/bridge/trigger", { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ job_id: currentJob.id }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || `trigger ${r.status}`);
-    statusEl.textContent = `Kernel pushed: ${j.kernel}. Kaggle takes a few minutes.`;
+    const r = await fetch("/api/ai/bridge/trigger", {
+      method: "POST", headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: currentJob.id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 403 ? "Bridge key invalid — " + KEY_HINT : (j.error || `trigger ${r.status}`));
+    statusEl.textContent = `Kernel pushed: ${j.kernel}. Kaggle takes a few minutes — press Refresh.`;
     refresh();
   } catch (e) { statusEl.textContent = "Trigger error: " + (e.message || e); }
 }
@@ -118,14 +147,14 @@ async function refresh() {
   try {
     const r = await fetch(`/api/ai/bridge/jobs/${currentJob.id}`, { headers: headers() });
     if (r.ok) { currentJob = await r.json(); renderJob(currentJob); }
-    const kr = await fetch(`/api/ai/bridge/kernel?ref=rizbiehelp/reavector-worker`, { headers: headers() });
+    const kr = await fetch("/api/ai/bridge/kernel?ref=rizbiehelp/reavector-worker", { headers: headers() });
     if (kr.ok) { const k = await kr.json(); metaEl.textContent = "kernel: " + (k.status || ""); }
   } catch (e) { outEl.textContent = "refresh: " + e; }
 }
 
 function renderJob(job) {
   outEl.textContent = JSON.stringify(job, null, 2).slice(0, 1200);
-  metaEl.textContent = `job: ${job.status}`;
+  metaEl.textContent = "job: " + job.status;
   if (!job.artifact) { preview.textContent = "Status: " + job.status + (job.error ? (" — " + job.error) : ""); return; }
   const url = abs("/api/ai/bridge/artifacts/" + job.artifact);
   const ext = (job.artifact.split(".").pop() || "").toLowerCase();
@@ -145,9 +174,14 @@ function renderJob(job) {
 
 // ---- wiring -----------------------------------------------------------
 keyEl.value = localStorage.getItem("rv_bridge_key") || "";
-$("saveKey").addEventListener("click", () => { localStorage.setItem("rv_bridge_key", keyEl.value.trim()); statusEl.textContent = "Key saved."; });
+$("saveKey").addEventListener("click", () => {
+  localStorage.setItem("rv_bridge_key", keyEl.value.trim());
+  statusEl.textContent = "Key saved — checking…";
+  checkBackend();
+});
 $("checkBackend").addEventListener("click", checkBackend);
 $("queue").addEventListener("click", queueJob);
 $("trigger").addEventListener("click", trigger);
 $("refresh").addEventListener("click", refresh);
+
 initThree(); loadRegistry(); checkBackend();
