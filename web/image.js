@@ -32,6 +32,7 @@ $("go").addEventListener("click", async () => {
     meta.textContent = "done";
     const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
     preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
+    const a = document.createElement("a"); a.href = url; a.download = job.artifact; a.click();
     statusEl.textContent = "Done.";
   } catch (e) {
     statusEl.textContent = "Error: " + (e.message || e);

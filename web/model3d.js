@@ -56,8 +56,9 @@ $("go").addEventListener("click", async () => {
     const job = await generate({ task: "image2_3d", model: modelSel.value, file, prompt: "", steps: Number(steps.value), onStage: (s) => { statusEl.textContent = s; } });
     meta.textContent = "done";
     const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
-    showGlb(url, job.artifact);
-    statusEl.textContent = "Done.";
+showGlb(url, job.artifact);
+        const a = document.createElement("a"); a.href = url; a.download = job.artifact; a.click();
+        statusEl.textContent = "Done.";
   } catch (e) {
     statusEl.textContent = "Error: " + (e.message || e);
   } finally { btn.disabled = false; }
