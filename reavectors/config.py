@@ -165,3 +165,11 @@ KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME", "").strip()
 KAGGLE_KEY = os.environ.get("KAGGLE_KEY", "").strip()
 KAGGLE_KERNEL_SLUG = os.environ.get("KAGGLE_KERNEL_SLUG", "reavector-worker").strip()
 AI_BRIDGE_BUCKET = os.environ.get("AI_BRIDGE_BUCKET", "ai-bridge").strip()
+
+
+# --- AI job rate limits / Kaggle quota guards ---
+AI_DAILY_IMAGE_JOBS = _int("AI_DAILY_IMAGE_JOBS", 20)
+AI_DAILY_VIDEO_JOBS = _int("AI_DAILY_VIDEO_JOBS", 4)
+AI_DAILY_3D_JOBS = _int("AI_DAILY_3D_JOBS", 10)
+AI_KERNEL_MAX_SECONDS = _int("AI_KERNEL_MAX_SECONDS", 2700)
+AI_JOB_POLL_SECONDS = _int("AI_JOB_POLL_SECONDS", 15)

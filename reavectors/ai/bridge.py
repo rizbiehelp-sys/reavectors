@@ -111,6 +111,18 @@ class ArtifactBridge:
             j.update({"status": "failed", "error": error}); self._write(j)
             return j
 
+    def set_meta(self, key, value):
+        with self._lock:
+            with open(os.path.join(self.art_dir, f"meta_{key}.json"), "w", encoding="utf-8") as f:
+                json.dump(value, f)
+
+    def get_meta(self, key):
+        p = os.path.join(self.art_dir, f"meta_{key}.json")
+        if not os.path.isfile(p):
+            return None
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+
     def put_blob(self, name, data, ctype="application/octet-stream"):
         if os.path.basename(name) != name:
             raise ValueError("bad name")
@@ -259,6 +271,14 @@ class SupabaseBridge:
             j = self._read_job(job_id)
             j.update({"status": "failed", "error": error}); self._write_job(j)
             return j
+
+    def set_meta(self, key, value):
+        with self._lock:
+            self._put(f"meta_{key}.json", json.dumps(value).encode(), "application/json")
+
+    def get_meta(self, key):
+        body = self._get(f"meta_{key}.json")
+        return json.loads(body) if body else None
 
     def put_blob(self, name, data, ctype="application/octet-stream"):
         if os.path.basename(name) != name:

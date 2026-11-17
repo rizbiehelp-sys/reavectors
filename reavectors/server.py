@@ -513,6 +513,15 @@ class Handler(BaseHTTPRequestHandler):
             scheme = self.headers.get("X-Forwarded-Proto", "https")
             host = self.headers.get("Host", "")
             base = f"{scheme}://{host}" if host else "https://reavectors.onrender.com"
+            # single-flight: never push a second kernel while one is queued/running
+            try:
+                st = str(kaggle_runner.status()).upper()
+            except Exception:  # noqa: BLE001
+                st = ""
+            if "RUNNING" in st or "QUEUED" in st:
+                return self._json(202, {"queued": True, "job": job,
+                                        "kernel": kaggle_runner.kernel_ref(),
+                                        "message": "GPU busy — the running kernel will process queued jobs"})
             try:
                 res = kaggle_runner.trigger(base, config.AI_BRIDGE_KEY)
             except kaggle_runner.KaggleUnavailable as exc:
@@ -526,7 +535,17 @@ class Handler(BaseHTTPRequestHandler):
                 body = json.loads(data or b"{}")
             except Exception:  # noqa: BLE001
                 return self._error(400, "invalid JSON")
-            job = bridge.submit(str(body.get("task", "")), str(body.get("model", "")),
+            task = str(body.get("task", ""))
+            import datetime as _dt
+            today = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+            cap = (config.AI_DAILY_IMAGE_JOBS if task in ("text2image", "image_edit", "texture")
+                   else config.AI_DAILY_VIDEO_JOBS if task in ("text2video", "image2video")
+                   else config.AI_DAILY_3D_JOBS)
+            used = sum(1 for j in bridge.list(None)
+                       if j.get("task") == task and str(j.get("created_at", "")).startswith(today))
+            if used >= cap:
+                return self._error(429, f"daily {task} limit reached ({cap}); resets at midnight UTC")
+            job = bridge.submit(task, str(body.get("model", "")),
                                 body.get("input_url"), body.get("params") or {})
             return self._json(200, job)
         if len(parts) == 4 and parts[1] == "jobs":
