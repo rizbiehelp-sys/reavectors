@@ -83,13 +83,13 @@ class Text2ImageAdapter(_DiffusersBase):
 class SDXLAdapter(Text2ImageAdapter):
     name = "sdxl"
     vram_gb = 10.0
-    model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+    model_id = os.environ.get("RV_SDXL_PATH", "stabilityai/stable-diffusion-xl-base-1.0")
 
 
 class ZImageAdapter(Text2ImageAdapter):
     name = "z-image"
     vram_gb = 12.0
-    model_id = "Tongyi-MAI/Z-Image-Turbo"
+    model_id = os.environ.get("RV_ZIMAGE_PATH", "Tongyi-MAI/Z-Image-Turbo")
     trust_remote_code = True
 
     def load(self) -> None:
@@ -122,7 +122,7 @@ class ZImageAdapter(Text2ImageAdapter):
 class FluxEditAdapter(_DiffusersBase):
     name = "flux-edit"
     vram_gb = 16.0
-    model_id = "black-forest-labs/FLUX.1-Kontext-dev"
+    model_id = os.environ.get("RV_FLUX_PATH", "black-forest-labs/FLUX.1-Kontext-dev")
 
     def load(self) -> None:
         from diffusers import AutoPipelineForImage2Image
@@ -152,7 +152,7 @@ class FluxEditAdapter(_DiffusersBase):
 class WanText2VideoAdapter(_DiffusersBase):
     name = "wan2.1"
     vram_gb = 10.0
-    model_id = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+    model_id = os.environ.get("RV_WAN_PATH", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers")
 
     def load(self) -> None:
         from diffusers import WanPipeline
@@ -182,7 +182,7 @@ class WanText2VideoAdapter(_DiffusersBase):
 class LtxImage2VideoAdapter(_DiffusersBase):
     name = "ltx-video"
     vram_gb = 12.0
-    model_id = "Lightricks/LTX-Video"
+    model_id = os.environ.get("RV_LTX_PATH", "Lightricks/LTX-Video")
 
     def load(self) -> None:
         try:
@@ -216,7 +216,7 @@ class LtxImage2VideoAdapter(_DiffusersBase):
 class TextureAdapter(_DiffusersBase):
     name = "texture"
     vram_gb = 12.0
-    model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+    model_id = os.environ.get("RV_TEXTURE_PATH", "stabilityai/stable-diffusion-xl-base-1.0")
 
     def load(self) -> None:
         from diffusers import AutoPipelineForImage2Image

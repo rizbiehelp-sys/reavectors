@@ -76,7 +76,7 @@ def build_kernel_dir(bridge_url: str, bridge_key: str, notebook_path: str = None
         "is_private": True,
         "enable_gpu": True,
         "enable_internet": True,
-        "dataset_sources": [],
+        "dataset_sources": [x.strip() for x in config.AI_KERNEL_DATASETS.split(",") if x.strip()],
         "competition_sources": [],
         "kernel_sources": [],
         "model_sources": [],
