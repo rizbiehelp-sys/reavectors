@@ -26,7 +26,7 @@ mainEl.addEventListener("change", async () => {
   try {
     const fd = new FormData();
     fd.append("image", mainFile);
-    const r = await fetch("/api/image/analyze", { method: "POST", headers: headers(), body: fd });
+    const r = await fetch("/api/ai/image/analyze", { method: "POST", headers: headers(), body: fd });
     const j = await r.json().catch(() => ({}));
     if (r.ok && j.understood) showUnderstood(j.understood);
     statusEl.textContent = "Ready — describe the background and press Generate.";
@@ -74,7 +74,7 @@ goEl.addEventListener("click", async () => {
     fd.append("transparent", outputEl.value === "transparent" ? "1" : "0");
     fd.append("model", modelEl.value);
 
-    const r = await fetch("/api/image/generate", { method: "POST", headers: headers(), body: fd });
+    const r = await fetch("/api/ai/image/generate", { method: "POST", headers: headers(), body: fd });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || "generation failed");
 
