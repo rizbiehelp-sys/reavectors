@@ -175,3 +175,9 @@ AI_KERNEL_MAX_SECONDS = _int("AI_KERNEL_MAX_SECONDS", 2700)
 AI_JOB_POLL_SECONDS = _int("AI_JOB_POLL_SECONDS", 15)
 
 AI_KERNEL_DATASETS = os.environ.get("AI_KERNEL_DATASETS", "").strip()
+
+
+# --- Cloudflare Workers AI (optional live image API; free daily Neurons) ---
+AI_CF_ACCOUNT_ID = os.environ.get("AI_CF_ACCOUNT_ID", "").strip()
+AI_CF_API_TOKEN = os.environ.get("AI_CF_API_TOKEN", "").strip()
+AI_CF_IMAGE_MODEL = os.environ.get("AI_CF_IMAGE_MODEL", "@cf/black-forest-labs/flux-2-klein-4b").strip()

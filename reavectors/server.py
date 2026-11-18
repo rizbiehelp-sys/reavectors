@@ -357,6 +357,19 @@ class Handler(BaseHTTPRequestHandler):
                 if parts == ["registry"]:
                     from .ai import registry as ai_registry
                     return self._json(200, ai_registry.manifest())
+                if parts == ["providers"]:
+                    from .ai import cloudflare_ai, registry as ai_registry
+                    from .ai.bridge import get_bridge, bridge_backend
+                    b = get_bridge()
+                    return self._json(200, {
+                        "bridge": {"backend": bridge_backend()},
+                        "kaggle": {"configured": bool(config.KAGGLE_USERNAME and config.KAGGLE_KEY),
+                                   "kernel": config.KAGGLE_KERNEL_SLUG},
+                        "cloudflare": {"configured": cloudflare_ai.configured(),
+                                       "model": config.AI_CF_IMAGE_MODEL},
+                        "queue": {"pending": len(b.list("pending"))},
+                        "registry": {"models": len(ai_registry.REGISTRY)},
+                    })
                 if parts and parts[0] == "bridge":
                     return self._bridge_get(parts, qs)
                 if parts == ["loras"]:
