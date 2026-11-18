@@ -1,104 +1,116 @@
-import { generate, registry, configured, headers } from "/gen.js";
+/* ReaVector Image Studio — one unified pipeline (Cloudflare only).
+   Preserve mode keeps the real product pixels; transparent mode returns RGBA. */
+import { headers } from "/gen.js";
 
 const $ = (id) => document.getElementById(id);
-const fileEl = $("file"), drop = $("drop"), statusEl = $("status"), preview = $("preview"), meta = $("meta");
+const mainEl = $("main"), refsEl = $("refs"), mainPrev = $("mainPrev"), refPrev = $("refPrev");
+const promptEl = $("prompt"), preserveEl = $("preserve"), outputEl = $("output"), modelEl = $("model");
+const goEl = $("go"), statusEl = $("status"), metaEl = $("meta");
+const origEl = $("orig"), resultEl = $("result"), understoodEl = $("understood");
+const downloads = $("downloads"), dlPng = $("dlPng"), dlJpg = $("dlJpg");
 const prog = $("prog"), countEl = $("count"), fillEl = $("fill"), stageTxt = $("stageTxt");
-const refPreview = $("refPreview");
-const sceneEl = $("scene");
-function tick({ remaining, pct }) { prog.hidden = false; countEl.textContent = Math.ceil(remaining) + "s"; fillEl.style.width = pct + "%"; }
-const mode = $("mode"), modelSel = $("model"), prompt = $("prompt"), steps = $("steps");
-let MODELS = [], file = null;
 
-steps.addEventListener("input", () => { $("stepsOut").textContent = steps.value; });
-drop.addEventListener("click", () => fileEl.click());
-fileEl.addEventListener("change", () => {
-  file = fileEl.files[0];
-  if (file) { statusEl.textContent = "Photo: " + file.name; refPreview.src = URL.createObjectURL(file); refPreview.hidden = false; }
-});
-mode.addEventListener("change", fill);
+let mainFile = null, refFiles = [], resultUrl = "";
 
-function fill() {
-  const list = MODELS.filter((m) => m.task === mode.value);
-  modelSel.innerHTML = list.map((m) => `<option value="${m.id}">${m.id}</option>`).join("") || "<option>none</option>";
+function tick({ remaining, pct }) {
+  prog.hidden = false;
+  countEl.textContent = Math.ceil(remaining) + "s";
+  fillEl.style.width = pct + "%";
 }
 
-(async () => {
-  MODELS = await registry();
-  const labels = { text2image: "Text → Image", image_edit: "Edit an image", texture: "Texture" };
-  mode.innerHTML = ["text2image", "image_edit", "texture"]
-    .filter((t) => MODELS.some((m) => m.task === t))
-    .map((t) => `<option value="${t}">${labels[t]}</option>`).join("");
-  fill();
-  if (!configured()) statusEl.textContent = "AI is not configured on the server yet.";
-})();
-
-async function cfImage() {
-  const p = prompt.value.trim();
-  if (!p) { statusEl.textContent = "Enter a prompt first."; return; }
-  const btn = $("go"); btn.disabled = true;
-  const est = 15; const t0 = Date.now(); prog.hidden = false; statusEl.textContent = "Generating with Cloudflare…";
-  const timer = setInterval(() => tick({ remaining: Math.max(0, est - (Date.now() - t0) / 1000),
-    pct: Math.min(95, ((Date.now() - t0) / 1000 / est) * 100) }), 1000);
-  try {
-    const r = await fetch("/api/ai/cf/image", { method: "POST",
-      headers: { ...headers(), "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: p }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "cloudflare failed");
-    const url = new URL(j.url, location.origin).href;
-    meta.textContent = "cloudflare · " + j.model;
-    preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
-    const a = document.createElement("a"); a.href = url; a.download = j.artifact; a.click();
-    countEl.textContent = "0s"; fillEl.style.width = "100%"; statusEl.textContent = "Done (Cloudflare).";
-    setTimeout(() => { prog.hidden = true; }, 900);
-  } catch (e) {
-    statusEl.textContent = "Cloudflare: " + (e.message || e) + " — add AI_CF_ACCOUNT_ID/AI_CF_API_TOKEN to enable.";
-    prog.hidden = true;
-  } finally { clearInterval(timer); btn.disabled = false; }
-}
-
-async function compositeScene() {
-  if (!file) { statusEl.textContent = "Add your product photo first."; return; }
-  const btn = $("go"); btn.disabled = true;
-  const est = 20, t0 = Date.now(); prog.hidden = false; statusEl.textContent = "Building product scene…";
-  const timer = setInterval(() => tick({ remaining: Math.max(0, est - (Date.now() - t0) / 1000),
-    pct: Math.min(95, ((Date.now() - t0) / 1000 / est) * 100) }), 1000);
+mainEl.addEventListener("change", async () => {
+  mainFile = mainEl.files[0] || null;
+  if (!mainFile) return;
+  mainOrig(mainFile);
+  statusEl.textContent = "Photo: " + mainFile.name + " — analysing…";
   try {
     const fd = new FormData();
-    fd.append("image", file);
-    fd.append("prompt", prompt.value.trim());
-    const r = await fetch("/api/ai/composite", { method: "POST", headers: headers(), body: fd });
+    fd.append("image", mainFile);
+    const r = await fetch("/api/image/analyze", { method: "POST", headers: headers(), body: fd });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || "composite failed");
-    const url = new URL(j.url, location.origin).href;
-    meta.textContent = "scene · " + (j.background || "");
-    preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
-    const a = document.createElement("a"); a.href = url; a.download = j.artifact; a.click();
-    countEl.textContent = "0s"; fillEl.style.width = "100%";
-    statusEl.textContent = "Done — your product/label is preserved.";
-    setTimeout(() => { prog.hidden = true; }, 900);
+    if (r.ok && j.understood) showUnderstood(j.understood);
+    statusEl.textContent = "Ready — describe the background and press Generate.";
   } catch (e) {
-    statusEl.textContent = "Scene: " + (e.message || e); prog.hidden = true;
-  } finally { clearInterval(timer); btn.disabled = false; }
+    statusEl.textContent = "Ready (analysis skipped).";
+  }
+});
+
+function mainOrig(file) {
+  origEl.src = URL.createObjectURL(file);
 }
 
-$("go").addEventListener("click", async () => {
-  if (sceneEl && sceneEl.checked) return compositeScene();
-  const provider = $("provider").value;
-  if (provider === "cloudflare") {
-    if (mode.value === "text2image") return cfImage();
-    statusEl.textContent = "Cloudflare does Text → Image; using Kaggle GPU for " + mode.value + "…";
-  }
-  const btn = $("go"); btn.disabled = true;
+refsEl.addEventListener("change", () => {
+  refFiles = Array.from(refsEl.files).slice(0, 3);
+  refPrev.innerHTML = "";
+  refFiles.forEach((f) => {
+    const img = document.createElement("img");
+    img.className = "refprev"; img.src = URL.createObjectURL(f); img.hidden = false;
+    refPrev.appendChild(img);
+  });
+});
+
+function showUnderstood(u) {
+  understoodEl.hidden = false;
+  const rows = Object.entries(u).map(([k, v]) => `<div class="kv"><span>${k}</span><span>${Array.isArray(v) ? v.join(", ") : v}</span></div>`).join("");
+  understoodEl.innerHTML = `<h4>What ReaVector understood</h4>${rows}`;
+}
+
+goEl.addEventListener("click", async () => {
+  const btn = goEl; btn.disabled = true;
+  const est = mainFile ? 20 : 12;
+  const t0 = Date.now();
+  prog.hidden = false; stageTxt.textContent = mainFile ? "Preparing product…" : "Generating…";
+  const timer = setInterval(() => tick({
+    remaining: Math.max(0, est - (Date.now() - t0) / 1000),
+    pct: Math.min(95, ((Date.now() - t0) / 1000 / est) * 100),
+  }), 1000);
+
   try {
-    const job = await generate({ task: mode.value, model: modelSel.value, file, prompt: prompt.value.trim(), steps: Number(steps.value), onStage: (s) => { statusEl.textContent = s; stageTxt.textContent = s; }, onTick: tick });
-    meta.textContent = "done";
-    const url = new URL("/api/ai/bridge/artifacts/" + job.artifact, location.origin).href;
-    preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
-    const a = document.createElement("a"); a.href = url; a.download = job.artifact; a.click();
-    countEl.textContent = "0s"; fillEl.style.width = "100%"; statusEl.textContent = "Done.";
+    const fd = new FormData();
+    if (mainFile) fd.append("image", mainFile);
+    refFiles.forEach((f, i) => fd.append("reference" + (i + 1), f));
+    fd.append("prompt", promptEl.value.trim());
+    fd.append("preserve", preserveEl.checked ? "1" : "0");
+    fd.append("transparent", outputEl.value === "transparent" ? "1" : "0");
+    fd.append("model", modelEl.value);
+
+    const r = await fetch("/api/image/generate", { method: "POST", headers: headers(), body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "generation failed");
+
+    resultUrl = new URL(j.url, location.origin).href;
+    resultEl.src = resultUrl;
+    downloads.style.display = "flex";
+    dlPng.href = resultUrl;
+    dlPng.download = j.artifact;
+    metaEl.textContent = `${j.mode} · ${j.background || ""} · refs ${j.refs_used || 0}`;
+    if (j.understood) showUnderstood(j.understood);
+    countEl.textContent = "0s"; fillEl.style.width = "100%";
+    statusEl.textContent = j.transparent ? "Done — transparent PNG." : "Done — your product is preserved.";
     setTimeout(() => { prog.hidden = true; }, 900);
   } catch (e) {
-    statusEl.textContent = "Error: " + (e.message || e); prog.hidden = true;
-  } finally { btn.disabled = false; }
+    statusEl.textContent = "Error: " + (e.message || e);
+    prog.hidden = true;
+  } finally {
+    clearInterval(timer);
+    btn.disabled = false;
+  }
+});
+
+dlJpg.addEventListener("click", () => {
+  if (!resultUrl) return;
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0);
+    c.toBlob((b) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b); a.download = "reavector.jpg"; a.click();
+    }, "image/jpeg", 0.92);
+  };
+  img.src = resultUrl;
 });

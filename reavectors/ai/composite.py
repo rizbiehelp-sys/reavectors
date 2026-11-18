@@ -80,3 +80,44 @@ def build_scene(image_bytes: bytes, bg_bytes: bytes | None, prompt: str = "") ->
     buf = io.BytesIO()
     out.save(buf, "PNG")
     return buf.getvalue()
+
+def understanding(img: Image.Image) -> dict:
+    """Heuristic 'what ReaVector understood' from the uploaded product photo."""
+    rgb = img.convert("RGB")
+    arr = np.asarray(rgb)
+    flat = arr.reshape(-1, 3)
+    # ignore near-white/near-black background pixels for the colour estimate
+    keep = flat[(flat.mean(axis=1) > 20) & (flat.mean(axis=1) < 240)]
+    col = np.median(keep if len(keep) else flat, axis=0).astype(int)
+    return {
+        "object": "product",
+        "product_colour": "#%02X%02X%02X" % tuple(int(v) for v in col),
+        "size": [rgb.width, rgb.height],
+        "preserve": ["shape", "cap", "label", "logo", "printed text"],
+        "requested_change": "background",
+        "source": "heuristic (CPU)",
+    }
+
+
+def build_scene_v2(image_bytes: bytes, bg_bytes: bytes | None = None,
+                   transparent: bool = False):
+    """Return (png_bytes, info). transparent -> RGBA cutout; else composite."""
+    img = Image.open(io.BytesIO(image_bytes))
+    product, mask = cutout(img)
+    filled = float(mask.mean())
+    if transparent:
+        buf = io.BytesIO(); product.save(buf, "PNG")
+        return buf.getvalue(), {"mode": "transparent", "background": "none",
+                                "foreground_fraction": round(filled, 3),
+                                "resampled": False}
+    bg = Image.open(io.BytesIO(bg_bytes)) if bg_bytes else _gradient((1024, 1024))
+    out = composite(product, bg)
+    buf = io.BytesIO(); out.save(buf, "PNG")
+    return buf.getvalue(), {"mode": "preserve", "background": "cloudflare" if bg_bytes else "gradient",
+                            "foreground_fraction": round(filled, 3), "resampled": True}
+
+
+def to_jpeg(png_bytes: bytes, quality: int = 92) -> bytes:
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    buf = io.BytesIO(); img.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()

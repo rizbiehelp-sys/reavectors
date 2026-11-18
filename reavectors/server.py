@@ -400,6 +400,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._bridge_post(parts)
                 if parts == ["cf", "image"]:
                     return self._cf_image()
+                if parts == ["image", "generate"]:
+                    return self._image_generate()
+                if parts == ["image", "analyze"]:
+                    return self._image_analyze()
                 if parts == ["composite"]:
                     return self._composite()
                 if parts == ["product3d"]:
@@ -641,6 +645,97 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(502, f"store failed: {type(exc).__name__}")
         return self._json(200, {"artifact": name, "url": "/api/ai/bridge/artifacts/" + name,
                                 "provider": "cloudflare", "model": cloudflare_ai.config.AI_CF_IMAGE_MODEL})
+
+    def _multipart(self):
+        ctype = self.headers.get("Content-Type", "")
+        data = self._read_bounded(config.MAX_UPLOAD_BYTES * 3)
+        if data is None:
+            return None, self._error(413, "upload too large")
+        if "multipart/form-data" not in ctype:
+            return None, self._error(415, "expected multipart/form-data")
+        boundary = None
+        for part in ctype.split(";"):
+            part = part.strip()
+            if part.startswith("boundary="):
+                boundary = part[len("boundary="):].strip().strip('"')
+        if not boundary:
+            return None, self._error(400, "missing multipart boundary")
+        return _parse_multipart(data, boundary), None
+
+    def _image_analyze(self):
+        if not self._bridge_key_ok():
+            return self._error(403, "owner key required")
+        fields, err = self._multipart()
+        if err:
+            return err
+        img = fields.get("image")
+        if not img:
+            return self._error(400, "missing 'image'")
+        from .security import validate_image
+        _fmt, reason = validate_image(img)
+        if reason:
+            return self._error(415, reason)
+        import io as _io
+        from PIL import Image
+        from .ai.composite import understanding
+        return self._json(200, {"understood": understanding(Image.open(_io.BytesIO(img)))})
+
+    def _image_generate(self):
+        """One unified image pipeline: preserve / transparent / text-to-image."""
+        if not self._bridge_key_ok():
+            return self._error(403, "owner key required")
+        fields, err = self._multipart()
+        if err:
+            return err
+        img = fields.get("image")
+        refs = [fields.get(f"reference{i}") for i in (1, 2, 3) if fields.get(f"reference{i}")]
+        prompt = (fields.get("prompt") or b"").decode("utf-8", "replace")
+        preserve = (fields.get("preserve") or b"1").decode().lower() not in ("0", "false", "")
+        transparent = (fields.get("transparent") or b"0").decode().lower() in ("1", "true")
+        from .ai import composite as _comp, cloudflare_ai
+        import io as _io
+        from PIL import Image
+        info = {}
+        if img:
+            from .security import validate_image
+            _fmt, reason = validate_image(img)
+            if reason:
+                return self._error(415, reason)
+            info["understood"] = _comp.understanding(Image.open(_io.BytesIO(img)))
+            if transparent:
+                out, info2 = _comp.build_scene_v2(img, None, transparent=True)
+            elif preserve:
+                bg = None
+                if cloudflare_ai.configured():
+                    try:
+                        bg = cloudflare_ai.CloudflareAI().text_to_image(
+                            prompt or "premium white studio surface, soft natural shadows, warm lighting")
+                    except Exception:  # noqa: BLE001
+                        bg = None
+                out, info2 = _comp.build_scene_v2(img, bg, transparent=False)
+            else:
+                out, info2 = _comp.build_scene_v2(img, None, transparent=False)
+                info2["mode"] = "creative-fallback"
+                info2["warning"] = "creative edit not enabled; product preserved"
+        else:
+            if not cloudflare_ai.configured():
+                return self._error(503, "Cloudflare AI not configured")
+            try:
+                out = cloudflare_ai.CloudflareAI().text_to_image(prompt or "a product photo")
+            except cloudflare_ai.CloudflareUnavailable as exc:
+                return self._error(502, str(exc))
+            info2 = {"mode": "generate", "background": "cloudflare"}
+        import uuid as _uuid
+        from .ai.bridge import get_bridge
+        name = "art_img_" + _uuid.uuid4().hex + ".png"
+        try:
+            get_bridge().put_blob(name, out, "image/png")
+        except Exception as exc:  # noqa: BLE001
+            return self._error(502, f"store failed: {type(exc).__name__}")
+        return self._json(200, {"artifact": name, "url": "/api/ai/bridge/artifacts/" + name,
+                                "refs_used": len(refs), "preserve": preserve,
+                                "transparent": transparent, **info2,
+                                "understood": info.get("understood")})
 
     def _composite(self):
         """Keep the real product; generate only the background, then paste the cutout."""
