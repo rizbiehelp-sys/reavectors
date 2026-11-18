@@ -39,7 +39,11 @@
         <label>Steps <output id="stepsOut">30</output><input id="steps" type="range" min="10" max="60" step="5" value="30" /></label>
       </div>
 
-      <div class="actions"><button id="go" class="primary">Generate 3D</button></div>
+      <div class="actions">
+        <button id="go" class="primary">Generate 3D (AI, needs GPU)</button>
+        <button id="instant">Build instantly (no GPU)</button>
+        <button id="record">Record 360 clip (webm)</button>
+      </div>
       <p id="status" class="status">Add a photo and press Generate — runs on Kaggle and loads the GLB here.</p>
       <div id="prog" class="genprog" hidden>
         <div class="row"><div class="spinner" style="margin:0;width:20px;height:20px"></div><span id="count" class="count">0s</span><span id="stageTxt" class="muted"></span></div>
