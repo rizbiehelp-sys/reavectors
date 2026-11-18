@@ -51,3 +51,21 @@ Not on the Render web request. Run it:
 The **Product 3D** page already builds parametric packaging in-browser with Three.js
 `LatheGeometry` and exports a real **GLB** via `GLTFExporter` — so users still get a
 usable model when Blender isn't available.
+
+## Motion (Phase 4) — product ads
+
+| File | Purpose |
+|---|---|
+| `scripts/presets.py` | turntable / reveal / orbit / push_in / pull_out |
+| `scripts/animate_product.py` | build + animate + render PNG frames |
+| `scripts/render_video.py` | FFmpeg: frames -> MP4 (H.264, faststart) |
+
+```bash
+# 1) render frames
+blender --background --python blender/scripts/animate_product.py --   --type bottle --preset turntable --frames-dir out/frames --resolution 720 --label label.png
+# 2) encode MP4
+python blender/scripts/render_video.py --frames-dir out/frames --fps 24 --out out/ad.mp4
+```
+
+Output MP4 is validated (exists, non-zero bytes) and can be uploaded through the
+ReaVector bridge as a job result (`task: motion`).

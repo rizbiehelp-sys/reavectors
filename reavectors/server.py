@@ -398,6 +398,8 @@ class Handler(BaseHTTPRequestHandler):
             elif method == "POST":
                 if parts and parts[0] == "bridge":
                     return self._bridge_post(parts)
+                if parts == ["cf", "image"]:
+                    return self._cf_image()
                 if parts == ["product3d"]:
                     return self._product3d(svc, user, qs)
                 if parts == ["3d"]:
@@ -605,6 +607,38 @@ class Handler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 return self._error(404, "job not found")
         return self._error(404, "not found")
+
+    def _cf_image(self):
+        """Cloudflare Workers AI image generation (free Neurons; owner-key gated)."""
+        from .ai import cloudflare_ai
+        if not cloudflare_ai.configured():
+            return self._error(503, "Cloudflare AI not configured")
+        if not self._bridge_key_ok():
+            return self._error(403, "owner key required")
+        data = self._read_bounded(64 * 1024) or b"{}"
+        try:
+            body = json.loads(data)
+        except Exception:  # noqa: BLE001
+            return self._error(400, "invalid JSON")
+        prompt = str(body.get("prompt", "")).strip()
+        if not prompt:
+            return self._error(400, "prompt required")
+        try:
+            client = cloudflare_ai.CloudflareAI()
+            img = client.text_to_image(prompt, steps=int(body.get("steps", 4)))
+        except cloudflare_ai.CloudflareUnavailable as exc:
+            return self._error(502, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return self._error(500, type(exc).__name__)
+        import uuid as _uuid
+        from .ai.bridge import get_bridge
+        name = "art_cf_" + _uuid.uuid4().hex + ".png"
+        try:
+            get_bridge().put_blob(name, img, "image/png")
+        except Exception as exc:  # noqa: BLE001
+            return self._error(502, f"store failed: {type(exc).__name__}")
+        return self._json(200, {"artifact": name, "url": "/api/ai/bridge/artifacts/" + name,
+                                "provider": "cloudflare", "model": cloudflare_ai.config.AI_CF_IMAGE_MODEL})
 
     def _product3d(self, svc, user, qs=None):
         """

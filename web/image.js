@@ -1,4 +1,4 @@
-import { generate, registry, configured } from "/gen.js";
+import { generate, registry, configured, headers } from "/gen.js";
 
 const $ = (id) => document.getElementById(id);
 const fileEl = $("file"), drop = $("drop"), statusEl = $("status"), preview = $("preview"), meta = $("meta");
@@ -27,7 +27,32 @@ function fill() {
   if (!configured()) statusEl.textContent = "AI is not configured on the server yet.";
 })();
 
+async function cfImage() {
+  const prompt = prompt.value.trim();
+  if (!prompt) { statusEl.textContent = "Enter a prompt first."; return; }
+  const est = 15; const t0 = Date.now(); prog.hidden = false;
+  const timer = setInterval(() => tick({ remaining: Math.max(0, est - (Date.now() - t0) / 1000),
+    pct: Math.min(95, ((Date.now() - t0) / 1000 / est) * 100) }), 1000);
+  try {
+    const r = await fetch("/api/ai/cf/image", { method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, steps: Number(steps.value) }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "cloudflare failed");
+    const url = new URL(j.url, location.origin).href;
+    meta.textContent = "cloudflare · " + j.model;
+    preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
+    const a = document.createElement("a"); a.href = url; a.download = j.artifact; a.click();
+    countEl.textContent = "0s"; fillEl.style.width = "100%"; statusEl.textContent = "Done (Cloudflare).";
+    setTimeout(() => { prog.hidden = true; }, 900);
+  } catch (e) {
+    statusEl.textContent = "Cloudflare: " + (e.message || e) + " — add AI_CF_ACCOUNT_ID/AI_CF_API_TOKEN to enable.";
+    prog.hidden = true;
+  } finally { clearInterval(timer); }
+}
+
 $("go").addEventListener("click", async () => {
+  if ($("provider").value === "cloudflare") return cfImage();
   const btn = $("go"); btn.disabled = true;
   try {
     const job = await generate({ task: mode.value, model: modelSel.value, file, prompt: prompt.value.trim(), steps: Number(steps.value), onStage: (s) => { statusEl.textContent = s; stageTxt.textContent = s; }, onTick: tick });
