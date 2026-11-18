@@ -113,7 +113,11 @@ class ZImageAdapter(Text2ImageAdapter):
             from diffusers import AutoPipelineForText2Image as cls
         self.pipe = cls.from_pretrained(self.model_id, torch_dtype=self._dtype())
         if torch.cuda.is_available():
-            self.pipe.to("cuda")
+            # Z-Image transformer is ~24 GB -> must offload to fit a 14.5 GB T4
+            try:
+                self.pipe.enable_model_cpu_offload()
+            except Exception:  # noqa: BLE001
+                self.pipe.to("cuda")
 
     def run(self, input_path: str, params: dict, out_dir: str) -> str:
         os.makedirs(out_dir, exist_ok=True)
