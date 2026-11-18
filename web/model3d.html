@@ -48,6 +48,24 @@
     <section class="stage">
       <div class="stage-head"><span>3D result</span><span id="meta" class="muted"></span></div>
       <div class="viewport" id="viewport"><div class="empty" id="empty">Your generated model appears here.</div></div>
+      <div class="actions" style="margin-top:10px">
+        <button data-view="front">Front</button>
+        <button data-view="back">Back</button>
+        <button data-view="left">Left</button>
+        <button data-view="right">Right</button>
+        <button id="resetView">Reset</button>
+        <button id="fsBtn">Fullscreen</button>
+      </div>
+      <div class="controls" style="margin-top:8px">
+        <label>Lighting
+          <select id="lighting">
+            <option value="studio">Studio</option>
+            <option value="soft">Soft</option>
+            <option value="sunset">Sunset</option>
+          </select>
+        </label>
+        <label class="check"><input id="shadows" type="checkbox" checked /> Shadows</label>
+      </div>
       <p id="dl" class="status" style="display:none"></p>
     </section>
   </main>

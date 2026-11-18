@@ -204,3 +204,21 @@ def _assemble_pdf(objects: List[bytes]) -> bytes:
     out += (f"trailer\n<< /Size {n} /Root 1 0 R >>\n"
             f"startxref\n{xref_pos}\n%%EOF\n").encode("latin-1")
     return bytes(out)
+
+
+def validate_export(fmt: str, data: bytes):
+    """Return (ok, reason). Checks the file's actual structure, not just the extension."""
+    fmt = (fmt or "").lower()
+    head = data[:256]
+    tail = data[-128:]
+    if fmt == "svg":
+        ok = b"<svg" in head and b"</svg>" in tail
+        return ok, "" if ok else "missing <svg> tags"
+    if fmt == "eps":
+        ok = head.startswith(b"%!PS-Adobe") and b"%%EOF" in tail
+        return ok, "" if ok else "bad EPS header/footer"
+    if fmt in ("pdf", "ai"):
+        # .ai is a PDF-compatible file (same approach Adobe uses); validate as PDF
+        ok = head.startswith(b"%PDF-") and b"%%EOF" in tail
+        return ok, "" if ok else "bad PDF header/footer"
+    return True, ""

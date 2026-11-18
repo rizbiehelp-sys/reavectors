@@ -11,6 +11,8 @@ const fileEl = $("file"), drop = $("drop"), modelSel = $("model"), steps = $("st
 let file = null, MODELS = [];
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 viewport.appendChild(renderer.domElement);
@@ -18,8 +20,12 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0f14);
 const camera = new THREE.PerspectiveCamera(42, viewport.clientWidth / viewport.clientHeight, 0.01, 100);
 camera.position.set(0, 0.2, 3);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
-scene.add(new THREE.HemisphereLight(0xffffff, 0x223, 1.1));
-const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(2, 3, 4); scene.add(key);
+const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(2, 3, 4);
+key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x223, 1.1); scene.add(hemi);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(4, 48),
+  new THREE.MeshStandardMaterial({ color: 0x151b23, roughness: 0.9 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.001; ground.receiveShadow = true; scene.add(ground);
 const group = new THREE.Group(); scene.add(group);
 addEventListener("resize", () => {
   camera.aspect = viewport.clientWidth / viewport.clientHeight; camera.updateProjectionMatrix();
@@ -45,11 +51,31 @@ function showGlb(url, name) {
     g.scene.position.sub(c);
     const m = Math.max(size.x, size.y, size.z) || 1;
     camera.position.set(0, m * 0.15, m * 2.2); controls.target.set(0, 0, 0); controls.update();
+    window.__rvMaxD = m;
     empty.style.display = "none";
     dl.style.display = "block";
     dl.innerHTML = `<a href="${url}" download="${name}">Download .glb</a>`;
   }, undefined, (e) => { statusEl.textContent = "GLB load failed: " + e; });
 }
+
+function view(name) {
+  const d = (window.__rvMaxD || 1) * 2.2;
+  const P = { front: [0, 0, d], back: [0, 0, -d], left: [-d, 0, 0], right: [d, 0, 0] }[name] || [0, (window.__rvMaxD||1)*0.15, d];
+  camera.position.set(P[0], P[1], P[2]); controls.target.set(0, 0, 0); controls.update();
+}
+document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => view(b.dataset.view)));
+$("resetView").addEventListener("click", () => view("front"));
+$("fsBtn").addEventListener("click", () => {
+  if (!document.fullscreenElement) viewport.requestFullscreen?.(); else document.exitFullscreen?.();
+});
+$("lighting").addEventListener("change", () => {
+  const v = $("lighting").value;
+  if (v === "soft") { key.intensity = 1.2; hemi.intensity = 1.5; key.color.set(0xffffff); scene.background = new THREE.Color(0x11161d); }
+  else if (v === "sunset") { key.intensity = 2.4; hemi.intensity = 0.6; key.color.set(0xffb07a); scene.background = new THREE.Color(0x1a120c); }
+  else { key.intensity = 2.0; hemi.intensity = 1.1; key.color.set(0xffffff); scene.background = new THREE.Color(0x0b0f14); }
+});
+$("shadows").addEventListener("change", () => { renderer.shadowMap.enabled = $("shadows").checked; });
+window.addEventListener("beforeunload", () => { renderer.dispose(); });
 
 $("go").addEventListener("click", async () => {
   if (!file) { statusEl.textContent = "Add a photo first."; return; }

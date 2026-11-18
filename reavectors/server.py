@@ -767,6 +767,10 @@ class Handler(BaseHTTPRequestHandler):
                 body = render_pdf(result)
             else:
                 body = render_eps(result)
+            from .export import validate_export
+            ok, reason = validate_export(fmt, body)
+            if not ok:
+                return self._error(500, f"export validation failed: {reason}")
             ctype, ext = EXPORT_TYPES[fmt]
             db.record_conversion(kind="export", engine=result.engine, fmt=fmt,
                                  style=params["style"], colors=result.color_count)
