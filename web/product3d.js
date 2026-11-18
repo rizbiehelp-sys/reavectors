@@ -51,6 +51,7 @@ modeSel.addEventListener("change", () => { extraWrapper.hidden = modeSel.value !
 }));
 refineEl.addEventListener("input", () => { refineOut.textContent = refineEl.value + " s"; });
 materialSel.addEventListener("change", () => { if (currentSpec) renderProduct(currentSpec); });
+$("spin").addEventListener("change", () => { controls.autoRotate = $("spin").checked; });
 wireEl.addEventListener("change", () => { if (productGroup) productGroup.traverse((o) => { if (o.isMesh && o.material) o.material.wireframe = wireEl.checked; }); });
 gridEl.addEventListener("change", () => { if (grid) grid.visible = gridEl.checked; });
 bgEl.addEventListener("input", () => { if (scene) scene.background = new THREE.Color(bgEl.value); });
@@ -114,6 +115,7 @@ function initThree() {
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.autoRotate = true; controls.autoRotateSpeed = 1.1;
   controls.minDistance = 0.6; controls.maxDistance = 12; controls.target.set(0, 0, 0);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x223, 1.0));

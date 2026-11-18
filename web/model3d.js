@@ -19,7 +19,9 @@ viewport.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0f14);
 const camera = new THREE.PerspectiveCamera(42, viewport.clientWidth / viewport.clientHeight, 0.01, 100);
 camera.position.set(0, 0.2, 3);
-const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 1.2;
+controls.target.set(0, 0, 0);
 const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(2, 3, 4);
 key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x223, 1.1); scene.add(hemi);
@@ -75,6 +77,7 @@ $("lighting").addEventListener("change", () => {
   else { key.intensity = 2.0; hemi.intensity = 1.1; key.color.set(0xffffff); scene.background = new THREE.Color(0x0b0f14); }
 });
 $("shadows").addEventListener("change", () => { renderer.shadowMap.enabled = $("shadows").checked; });
+$("spin").addEventListener("change", () => { controls.autoRotate = $("spin").checked; });
 window.addEventListener("beforeunload", () => { renderer.dispose(); });
 
 $("go").addEventListener("click", async () => {
