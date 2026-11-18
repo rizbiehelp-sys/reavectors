@@ -91,7 +91,7 @@ def validate_image(data: bytes) -> Tuple[Optional[str], Optional[str]]:
                 return None, f"image too large (max edge {config.MAX_DIM}px)"
             if w * h > config.MAX_PIXELS:
                 return None, f"image too large (max {config.MAX_PIXELS} pixels)"
-            im.verify()  # verifies the file is not truncated/corrupt
+            im.load()  # actually decode (catches truncation; more portable than verify())
         return fmt, None
     except UnidentifiedImageError:
         return None, "not a recognised image"
