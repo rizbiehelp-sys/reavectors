@@ -26,8 +26,8 @@
       <div class="controls">
         <label>Provider
           <select id="provider">
+            <option value="cloudflare" selected>Cloudflare (fast, free tier)</option>
             <option value="kaggle">Kaggle GPU (queue)</option>
-            <option value="cloudflare">Cloudflare (fast, free tier)</option>
           </select>
         </label>
         <label>Mode
@@ -46,6 +46,7 @@
           <p class="drop-title">Add a photo (optional)</p>
           <p class="drop-sub">needed for Edit / Texture · JPG · PNG · WebP</p>
         </div>
+      <img id="refPreview" class="refprev" hidden alt="reference" />
       </div>
 
       <div class="controls">

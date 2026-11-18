@@ -2,6 +2,7 @@ import { generate, registry, configured } from "/gen.js";
 
 const $ = (id) => document.getElementById(id);
 const fileEl = $("file"), drop = $("drop"), statusEl = $("status"), preview = $("preview"), meta = $("meta");
+const refPreview = $("refPreview");
 const prog = $("prog"), countEl = $("count"), fillEl = $("fill"), stageTxt = $("stageTxt");
 function tick({ remaining, pct }) { prog.hidden = false; countEl.textContent = Math.ceil(remaining) + "s"; fillEl.style.width = pct + "%"; }
 const mode = $("mode"), modelSel = $("model"), prompt = $("prompt"), steps = $("steps");
@@ -9,7 +10,7 @@ let MODELS = [], file = null;
 
 steps.addEventListener("input", () => { $("stepsOut").textContent = steps.value; });
 drop.addEventListener("click", () => fileEl.click());
-fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) statusEl.textContent = "Photo: " + file.name; });
+fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) { statusEl.textContent = "Photo: " + file.name; refPreview.src = URL.createObjectURL(file); refPreview.hidden = false; } });
 mode.addEventListener("change", fill);
 
 function fill() {

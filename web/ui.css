@@ -200,3 +200,5 @@ button.primary:hover { box-shadow: 0 12px 28px rgba(53, 214, 193, .35); }
 .count { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; min-width: 64px; }
 .bar { height: 6px; border-radius: 999px; background: #1b2230; overflow: hidden; }
 .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #7ff5e6); transition: width .35s ease; }
+
+.refprev { max-width:100%; max-height:170px; border-radius:10px; margin-top:10px; display:block; }

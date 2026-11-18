@@ -37,7 +37,7 @@ addEventListener("resize", () => {
 
 steps.addEventListener("input", () => { $("stepsOut").textContent = steps.value; });
 drop.addEventListener("click", () => fileEl.click());
-fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) statusEl.textContent = "Photo: " + file.name; });
+fileEl.addEventListener("change", () => { file = fileEl.files[0]; if (file) { statusEl.textContent = "Photo: " + file.name; refPreview.src = URL.createObjectURL(file); refPreview.hidden = false; } });
 
 (async () => {
   MODELS = (await registry()).filter((m) => m.task === "image2_3d");
