@@ -315,9 +315,23 @@ def analyze_product(image_bytes: bytes, label_bytes: bytes = None, quad=None,
                 pass
 
     emit("Loading photo", 4)
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    raw = Image.open(io.BytesIO(image_bytes))
+    bg = [255, 255, 255]
+    alpha_mask = None
+    if raw.mode in ("RGBA", "LA") or (raw.mode == "P" and "transparency" in raw.info):
+        rgba = raw.convert("RGBA")
+        a = np.asarray(rgba.split()[-1])
+        if a.min() < 250:                      # image already has real transparency (e.g. remove.bg)
+            white = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+            img = Image.alpha_composite(white, rgba).convert("RGB")
+            alpha_mask = (a > 127)
+            bg = [int(v) for v in np.asarray(img)[~alpha_mask].mean(axis=0)] if (~alpha_mask).any() else [255, 255, 255]
+    if alpha_mask is None:
+        img = raw.convert("RGB")
+        _cutout, mask0, bg = make_cutout(img)
+    else:
+        mask0 = alpha_mask
     w, h = img.size
-    _cutout, mask0, bg = make_cutout(img)
 
     # work at a bounded resolution for the heavy matting pass
     scale = min(1.0, WORK_MAX / float(max(w, h)))
