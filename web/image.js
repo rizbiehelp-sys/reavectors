@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const fileEl = $("file"), drop = $("drop"), statusEl = $("status"), preview = $("preview"), meta = $("meta");
 const prog = $("prog"), countEl = $("count"), fillEl = $("fill"), stageTxt = $("stageTxt");
 const refPreview = $("refPreview");
+const sceneEl = $("scene");
 function tick({ remaining, pct }) { prog.hidden = false; countEl.textContent = Math.ceil(remaining) + "s"; fillEl.style.width = pct + "%"; }
 const mode = $("mode"), modelSel = $("model"), prompt = $("prompt"), steps = $("steps");
 let MODELS = [], file = null;
@@ -56,7 +57,33 @@ async function cfImage() {
   } finally { clearInterval(timer); btn.disabled = false; }
 }
 
+async function compositeScene() {
+  if (!file) { statusEl.textContent = "Add your product photo first."; return; }
+  const btn = $("go"); btn.disabled = true;
+  const est = 20, t0 = Date.now(); prog.hidden = false; statusEl.textContent = "Building product scene…";
+  const timer = setInterval(() => tick({ remaining: Math.max(0, est - (Date.now() - t0) / 1000),
+    pct: Math.min(95, ((Date.now() - t0) / 1000 / est) * 100) }), 1000);
+  try {
+    const fd = new FormData();
+    fd.append("image", file);
+    fd.append("prompt", prompt.value.trim());
+    const r = await fetch("/api/ai/composite", { method: "POST", headers: headers(), body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "composite failed");
+    const url = new URL(j.url, location.origin).href;
+    meta.textContent = "scene · " + (j.background || "");
+    preview.innerHTML = `<img src="${url}" alt="result" /><br><a href="${url}" download>Download</a>`;
+    const a = document.createElement("a"); a.href = url; a.download = j.artifact; a.click();
+    countEl.textContent = "0s"; fillEl.style.width = "100%";
+    statusEl.textContent = "Done — your product/label is preserved.";
+    setTimeout(() => { prog.hidden = true; }, 900);
+  } catch (e) {
+    statusEl.textContent = "Scene: " + (e.message || e); prog.hidden = true;
+  } finally { clearInterval(timer); btn.disabled = false; }
+}
+
 $("go").addEventListener("click", async () => {
+  if (sceneEl && sceneEl.checked) return compositeScene();
   const provider = $("provider").value;
   if (provider === "cloudflare") {
     if (mode.value === "text2image") return cfImage();

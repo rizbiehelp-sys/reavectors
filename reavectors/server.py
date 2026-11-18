@@ -400,6 +400,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._bridge_post(parts)
                 if parts == ["cf", "image"]:
                     return self._cf_image()
+                if parts == ["composite"]:
+                    return self._composite()
                 if parts == ["product3d"]:
                     return self._product3d(svc, user, qs)
                 if parts == ["3d"]:
@@ -639,6 +641,56 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(502, f"store failed: {type(exc).__name__}")
         return self._json(200, {"artifact": name, "url": "/api/ai/bridge/artifacts/" + name,
                                 "provider": "cloudflare", "model": cloudflare_ai.config.AI_CF_IMAGE_MODEL})
+
+    def _composite(self):
+        """Keep the real product; generate only the background, then paste the cutout."""
+        if not self._bridge_key_ok():
+            return self._error(403, "owner key required")
+        ctype = self.headers.get("Content-Type", "")
+        data = self._read_bounded(config.MAX_UPLOAD_BYTES * 3)
+        if data is None:
+            return self._error(413, "upload too large")
+        if "multipart/form-data" not in ctype:
+            return self._error(415, "expected multipart/form-data")
+        boundary = None
+        for part in ctype.split(";"):
+            part = part.strip()
+            if part.startswith("boundary="):
+                boundary = part[len("boundary="):].strip().strip('"')
+        if not boundary:
+            return self._error(400, "missing multipart boundary")
+        fields = _parse_multipart(data, boundary)
+        img = fields.get("image")
+        if not img:
+            return self._error(400, "missing 'image'")
+        prompt = (fields.get("prompt") or b"").decode("utf-8", "replace")
+        from .security import validate_image
+        _fmt, reason = validate_image(img)
+        if reason:
+            return self._error(415, reason)
+        from .ai import composite, cloudflare_ai
+        bg_bytes = None
+        used = "gradient"
+        if cloudflare_ai.configured():
+            try:
+                bg_bytes = cloudflare_ai.CloudflareAI().text_to_image(
+                    prompt or "clean studio floor, soft shadows, plain background")
+                used = "cloudflare"
+            except Exception:  # noqa: BLE001
+                bg_bytes = None
+        try:
+            out = composite.build_scene(img, bg_bytes, prompt)
+        except Exception as exc:  # noqa: BLE001
+            return self._error(500, f"composite failed: {type(exc).__name__}")
+        import uuid as _uuid
+        from .ai.bridge import get_bridge
+        name = "art_comp_" + _uuid.uuid4().hex + ".png"
+        try:
+            get_bridge().put_blob(name, out, "image/png")
+        except Exception as exc:  # noqa: BLE001
+            return self._error(502, f"store failed: {type(exc).__name__}")
+        return self._json(200, {"artifact": name, "url": "/api/ai/bridge/artifacts/" + name,
+                                "background": used, "product": "original pixels preserved"})
 
     def _product3d(self, svc, user, qs=None):
         """
