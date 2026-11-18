@@ -125,8 +125,8 @@ class ZImageAdapter(Text2ImageAdapter):
             self.load()
         image = self.pipe(
             prompt=_prompt_from(input_path, params),
-            num_inference_steps=int(params.get("steps", 8)),
-            guidance_scale=float(params.get("guidance", 0.0)),
+            num_inference_steps=int(params.get("steps", 9)),
+            guidance_scale=float(params.get("guidance", 1.0)),
             height=int(params.get("height", 1024)), width=int(params.get("width", 1024)),
         ).images[0]
         path = os.path.join(out_dir, "output.png")
