@@ -65,3 +65,9 @@ Fix: attach weights as a **Kaggle Dataset** (mounted, not downloaded per run) or
 
 Z-Image / Wan / LTX / FLUX cannot run on Kaggle free tier: the download (or the
 dataset build) dies with "No space left on device". Only SDXL-class models fit.
+
+
+## Z-Image on T4 (parts mounted)
+- Parts `p1..p4` (public) mounted + merged -> pipeline loads from /kaggle/input (no download). "Loading weights 398/398" OK.
+- Inference completes (~6-8 min) but output is **all-black** at both guidance 0.0 and 1.0.
+- Cause: Z-Image-Turbo is a **bf16** DiT; the T4 (compute 7.5) has no native bf16 and fp16 gives NaN/zero output. Not usable on a T4 without an fp8/quantized build.
