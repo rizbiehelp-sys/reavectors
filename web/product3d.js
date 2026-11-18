@@ -14,6 +14,13 @@ import { GLTFExporter } from "/vendor/three/addons/exporters/GLTFExporter.js";
 import { GLTFLoader } from "/vendor/three/addons/loaders/GLTFLoader.js";
 
 const $ = (id) => document.getElementById(id);
+const SHAPES = {
+  slim: [[0.035,-0.5],[0.05,-0.45],[0.052,-0.10],[0.052,0.12],[0.032,0.20],[0.018,0.30],[0.018,0.45],[0.022,0.5]],
+  milk: [[0.075,-0.5],[0.078,-0.45],[0.078,0.05],[0.062,0.18],[0.030,0.28],[0.028,0.42],[0.032,0.5]],
+  jar:  [[0.075,-0.5],[0.080,-0.45],[0.080,0.38],[0.062,0.45],[0.062,0.5]],
+  can:  [[0.050,-0.5],[0.052,-0.47],[0.052,0.47],[0.050,0.5]],
+};
+
 const statusEl = $("status"), drop = $("drop"), photoInput = $("photo");
 const labelInput = $("label"), backInput = $("back"), sideInput = $("side");
 const modeSel = $("mode"), extraWrapper = $("extraWrapper"), materialSel = $("material");
@@ -51,6 +58,7 @@ modeSel.addEventListener("change", () => { extraWrapper.hidden = modeSel.value !
 }));
 refineEl.addEventListener("input", () => { refineOut.textContent = refineEl.value + " s"; });
 materialSel.addEventListener("change", () => { if (currentSpec) renderProduct(currentSpec); });
+$("preset").addEventListener("change", () => { if (currentSpec) renderProduct(currentSpec); });
 $("spin").addEventListener("change", () => { controls.autoRotate = $("spin").checked; });
 wireEl.addEventListener("change", () => { if (productGroup) productGroup.traverse((o) => { if (o.isMesh && o.material) o.material.wireframe = wireEl.checked; }); });
 gridEl.addEventListener("change", () => { if (grid) grid.visible = gridEl.checked; });
@@ -180,17 +188,21 @@ async function renderProduct(spec) {
   const bmat = bodyMaterial(spec); bmat.wireframe = wire;
 
   // body (lathe through the measured profile)
-  const pts = spec.profile.map((p) => new THREE.Vector2(Math.max(0.0006, p[0]), p[1]));
+  const preset = ($("preset") && $("preset").value) || "photo";
+  const src = (preset !== "photo" && SHAPES[preset]) ? SHAPES[preset] : spec.profile;
+  const pts = src.map((p) => new THREE.Vector2(Math.max(0.0006, p[0]), p[1]));
+  const bodyR = Math.max(...pts.map((v) => v.x));
   const bodyMesh = new THREE.Mesh(new THREE.LatheGeometry(pts, 128), bmat);
   productGroup.add(bodyMesh);
 
   // bottom disc (closed base)
-  const bot = new THREE.Mesh(new THREE.CircleGeometry(spec.profile[0][0], 64),
+  const bot = new THREE.Mesh(new THREE.CircleGeometry(bodyR, 64),
     new THREE.MeshStandardMaterial({ color: bmat.color, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide }));
   bot.rotation.x = Math.PI / 2; bot.position.y = -0.5; productGroup.add(bot);
 
   // cap (metal), sized from the neck
-  const capR = Math.max(m.neck_radius * 1.5, m.body_radius * 0.3), capH = 0.075;
+  const topR = pts[pts.length - 1].x;
+  const capR = Math.max(topR * 1.6, bodyR * 0.3), capH = 0.075;
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(capR, capR, capH, 64),
     new THREE.MeshStandardMaterial({ color: 0x9aa4ad, metalness: 0.95, roughness: 0.3, envMap: envTex, wireframe: wire }));
   cap.position.y = 0.5 + capH / 2; productGroup.add(cap);
@@ -199,7 +211,7 @@ async function renderProduct(spec) {
   try {
     const tex = await loadTex(spec.label.image);
     const band = m.label_band, h = Math.max(0.02, band.y1 - band.y0);
-    const lr = m.body_radius * 1.004;
+    const lr = bodyR * 1.004;
     const labelGeo = new THREE.CylinderGeometry(lr, lr, h, 128, 1, true, -wrap / 2 + rot, wrap);
     const labelMat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.55, metalness: 0.0, side: THREE.DoubleSide, wireframe: wire });
     const labelMesh = new THREE.Mesh(labelGeo, labelMat);
