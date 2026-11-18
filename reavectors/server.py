@@ -674,7 +674,7 @@ class Handler(BaseHTTPRequestHandler):
         from .security import validate_image
         _fmt, reason = validate_image(img)
         if reason:
-            return self._error(415, reason)
+            return self._error(415, reason + f" [len={len(img)} head={img[:8].hex()} tail={img[-4:].hex()}]")
         import io as _io
         from PIL import Image
         from .ai.composite import understanding
