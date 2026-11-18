@@ -52,7 +52,7 @@ class CloudflareAI:
     def text_to_image(self, prompt: str, steps: int = 4) -> bytes:
         url = (f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}"
                f"/ai/run/{self.model}")
-        code, body = self._transport(url, {"prompt": prompt[:2048], "num_steps": int(steps)})
+        code, body = self._transport(url, {"prompt": prompt[:2048]})
         if code >= 300:
             raise CloudflareUnavailable(f"[{code}] {body[:200]!r}")
         # Responses may be a JSON {result:{image: b64}} or raw image bytes
